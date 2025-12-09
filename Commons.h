@@ -9,7 +9,7 @@
 
 //#define USE_RECORD_THRESHOLD
 #define MAX_PATCH_SETTINGS 16 // Max number of available MIDI channels
-#define PATCH_SETTINGS_NAME "oneiroi"
+#define PATCH_SETTINGS_NAME "technomachine"
 #define PATCH_VERSION_MAJOR 1
 #define PATCH_VERSION_MINOR 1
 

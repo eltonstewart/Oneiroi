@@ -1,11 +1,11 @@
-#ifndef __Oneiroi_1_2_2Patch_hpp__
-#define __Oneiroi_1_2_2Patch_hpp__
+#ifndef __TechnoMachinePatch_hpp__
+#define __TechnoMachinePatch_hpp__
 
 #include "Commons.h"
 #include "Ui.h"
 #include "Clock.h"
 
-class Oneiroi_1_2_2Patch : public Patch {
+class TechnoMachinePatch : public Patch {
 private:
     Ui* ui_;
     Oneiroi* oneiroi_;
@@ -16,7 +16,7 @@ private:
     PatchState patchState;
 
 public:
-    Oneiroi_1_2_2Patch()
+    TechnoMachinePatch()
     {
         patchState.sampleRate = getSampleRate();
         patchState.blockRate = getBlockRate();
@@ -25,7 +25,7 @@ public:
         oneiroi_ = Oneiroi::create(&patchCtrls, &patchCvs, &patchState);
         clock_ = Clock::create(&patchCtrls, &patchState);
     }
-    ~Oneiroi_1_2_2Patch()
+    ~TechnoMachinePatch()
     {
         Oneiroi::destroy(oneiroi_);
         Ui::destroy(ui_);
@@ -50,4 +50,4 @@ public:
     }
 };
 
-#endif // __Oneiroi_1_2_2Patch_hpp__
+#endif // __TechnoMachinePatch_hpp__

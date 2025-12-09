@@ -497,9 +497,9 @@ public:
         return moving_;
     }
 
-    virtual ParamCatchUp GetCatchUpState();
-    virtual bool Process();
-    virtual void Reset();
+    virtual ParamCatchUp GetCatchUpState() { return ParamCatchUp::PARAM_CATCH_UP_NONE; }
+    virtual bool Process() { return false; }
+    virtual void Reset() {}
 };
 
 class KnobController : public CatchUpController
