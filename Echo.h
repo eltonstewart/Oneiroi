@@ -132,10 +132,11 @@ private:
 
             float d = MapExpo(echoDensity_, 0.f, 1.f, kEchoMinLengthSamples, patchState_->clockSamples * kEchoInternalClockMultiplier);
             size_t s = kEchoFadeSamples;
-            ParameterInterpolator densityParam(&oldDensity_, d, s);
+            ParameterInterpolator densityParam(&oldDensity_, d, s, ParameterInterpolator::BY_SIZE);
 
             for (size_t i = 0; i < kEchoTaps; i++)
             {
+
                 SetTapTime(i, densityParam.Next() * kEchoTapsRatios[i]);
             }
         }

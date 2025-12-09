@@ -82,6 +82,10 @@ enum ParamCv {
     PARAM_CV_ECHO_DENSITY,
     PARAM_CV_AMBIENCE_DECAY,
     PARAM_CV_AMBIENCE_SPACETIME,
+    PARAM_CV_LOOPER_VOL,
+    PARAM_CV_OSC1_VOL,
+    PARAM_CV_OSC2_VOL,
+    PARAM_CV_INPUT_VOL,
     PARAM_CV_LAST
 };
 
@@ -99,6 +103,10 @@ const PatchParameterId paramCvMap[PARAM_CV_LAST] = {
     PARAMETER_D,
     PARAMETER_AC,
     PARAMETER_AC,
+    PARAMETER_H,  // Looper Vol
+    PARAMETER_AA, // Osc1 Vol
+    PARAMETER_AB, // Osc2 Vol
+    PARAMETER_AE, // Input Vol
 };
 
 enum ParamSwitch {
@@ -752,14 +760,21 @@ public:
 class FaderController : public CatchUpController
 {
 private:
-    LockableParam lockableParam_;
+    PatchState* patchState_;
+
+    LockableParam lockableParams_[PARAM_LOCKABLE_LAST];
+    LockableParamName selectedParam_;
 
 public:
     FaderController() {}
-    FaderController(PatchState* patchState, float* param, float lpCoeff, float movementDelta)
+    FaderController(PatchState* patchState, float* mainParam, float* modParam, float* cvParam, float lpCoeff, float movementDelta)
     {
-        lockableParam_.Init(patchState, param, LockableParamName::PARAM_LOCKABLE_MAIN, ParamState::PARAM_STATE_TRACKING);
+        patchState_ = patchState;
+        lockableParams_[LockableParamName::PARAM_LOCKABLE_MAIN].Init(patchState, mainParam, LockableParamName::PARAM_LOCKABLE_MAIN, ParamState::PARAM_STATE_TRACKING);
+        lockableParams_[LockableParamName::PARAM_LOCKABLE_MOD].Init(patchState, modParam, LockableParamName::PARAM_LOCKABLE_MOD, ParamState::PARAM_STATE_LOCKED, patchState->modAttenuverters, modParam != NULL);
+        lockableParams_[LockableParamName::PARAM_LOCKABLE_CV].Init(patchState, cvParam, LockableParamName::PARAM_LOCKABLE_CV, ParamState::PARAM_STATE_LOCKED, patchState->cvAttenuverters, cvParam != NULL);
 
+        selectedParam_ = LockableParamName::PARAM_LOCKABLE_MAIN;
         catchUp_ = ParamCatchUp::PARAM_CATCH_UP_NONE;
         movementDelta_ = movementDelta;
 
@@ -777,11 +792,13 @@ public:
 
     static FaderController* create(
         PatchState* patchState,
-        float* param,
+        float* mainParam,
+        float* modParam = NULL,
+        float* cvParam = NULL,
         float lpCoeff = 0.02f,
         float movementDelta = 0.01f
     ) {
-        return new FaderController(patchState, param, lpCoeff, movementDelta);
+        return new FaderController(patchState, mainParam, modParam, cvParam, lpCoeff, movementDelta);
     }
 
     static void destroy(FaderController* obj)
@@ -789,14 +806,76 @@ public:
         delete obj;
     }
 
-    inline void SetValue(float value)
+    inline void SetValue(float value, LockableParamName name = LockableParamName::PARAM_LOCKABLE_MAIN)
     {
-        lockableParam_.InitValue(value);
+        if (LockableParamName::PARAM_LOCKABLE_MAIN == name)
+        {
+            lockableParams_[name].InitValue(value);
+        }
+        else
+        {
+            lockableParams_[name].SetValue(value);
+        }
     }
 
     inline void Reset()
     {
-        lockableParam_.Realign();
+        switch (selectedParam_)
+        {
+        case LockableParamName::PARAM_LOCKABLE_MOD:
+            lockableParams_[selectedParam_].Clear();
+            break;
+        case LockableParamName::PARAM_LOCKABLE_CV:
+            lockableParams_[selectedParam_].Reset();
+            break;
+
+        default:
+            lockableParams_[LockableParamName::PARAM_LOCKABLE_MAIN].Realign();
+            break;
+        }
+    }
+
+    inline void SetFuncMode(FuncMode funcMode)
+    {
+        LockableParamName selectedParam;
+
+        switch (funcMode)
+        {
+        case FUNC_MODE_MOD:
+            selectedParam = PARAM_LOCKABLE_MOD;
+            break;
+
+        case FUNC_MODE_CV:
+            selectedParam = PARAM_LOCKABLE_CV;
+            break;
+
+        default:
+            selectedParam = PARAM_LOCKABLE_MAIN;
+            break;
+        }
+
+        // Return if the selected parameter didn't change.
+        if (selectedParam == selectedParam_)
+        {
+            return;
+        }
+
+        selectedParam_ = selectedParam;
+
+        // If the selected parameter is inactive, set it to the main parameter
+        // and return,
+        if (!lockableParams_[selectedParam_].IsActive()) {
+            selectedParam_ = LockableParamName::PARAM_LOCKABLE_MAIN;
+
+            return;
+        }
+
+        for (size_t i = 0; i < LockableParamName::PARAM_LOCKABLE_LAST; i++)
+        {
+            lockableParams_[i].SelectParam(selectedParam_);
+            lockableParams_[i].Lock();
+        }
+        lockableParams_[selectedParam_].Unlock();
     }
 
     inline void Read(ParamFader fader)
@@ -857,14 +936,30 @@ public:
             samplesSinceStartMoving_ = 0;
         }
 
-        lockableParam_.Process(ctrlValue_, moving_);
+        for (size_t i = 0; i < LockableParamName::PARAM_LOCKABLE_LAST; i++)
+        {
+            lockableParams_[i].Process(ctrlValue_, moving_);
+        }
 
         return moving_;
     }
 
     inline ParamCatchUp GetCatchUpState()
     {
-        ParamCatchUp catchUp = lockableParam_.GetCatchUpState();
+        ParamCatchUp catchUp = ParamCatchUp::PARAM_CATCH_UP_NONE;
+
+        for (size_t i = 0; i < LockableParamName::PARAM_LOCKABLE_LAST; i++)
+        {
+            if (lockableParams_[i].IsActive())
+            {
+                catchUp = lockableParams_[i].GetCatchUpState();
+                if (ParamCatchUp::PARAM_CATCH_UP_NONE != catchUp)
+                {
+                    // Found one parameter that needs to catch up.
+                    break;
+                }
+            }
+        }
 
         if (catchUp != catchUp_)
         {

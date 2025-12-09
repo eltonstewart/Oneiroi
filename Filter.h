@@ -195,6 +195,8 @@ private:
     float dryWet_;
     float noiseLevel_;
     float feedback_;
+    float oldCutoff_;
+    float oldResonance_;
 
     void SetMode(float value)
     {
@@ -225,11 +227,11 @@ private:
         mode_ = mode;
     }
 
-    void SetFreq(float value)
+    void SetFreqHz(float cutoff)
     {
         filterGain_ = kFilterLpGainMin;
 
-        float cutoff = Clamp(MapLog(value, 0.f, 1.f, 10.f, 22000.f), 10.f, 22000.f);
+        // float cutoff = Clamp(MapLog(value, 0.f, 1.f, 10.f, 22000.f), 10.f, 22000.f);
 
         switch (mode_)
         {
@@ -259,7 +261,22 @@ private:
                 break;
             }
         case FilterMode::CF:
-            float f = Clamp(Map(value, 0.f, 1.f, 100.f, 15000.f), 100.f, 15000.f);
+            // CF mode uses linear mapping in original SetFreq, so this is trickier.
+            // Original: float f = Clamp(Map(value, 0.f, 1.f, 100.f, 15000.f), 100.f, 15000.f);
+            // If SetFreqHz receives "Hz", we assume it's the target frequency.
+            // However, CF mode frequency mapping was LINEAR 100-15000, while others were LOG 10-22000.
+            // We need to handle this.
+            
+            // If we are in CF mode, the input 'cutoff' is expected to be linear interpolated Hz?
+            // No, consistency is key. If we switch modes, the frequency response shouldn't jump wildly if we assume 'cutoff' is always Hz.
+            // But the original code mapped 'value' differently for CF vs others.
+            // We should respect the mapping based on mode before interpolation.
+            
+            float f = cutoff; 
+            // Clamp(Map(value, 0.f, 1.f, 100.f, 15000.f), 100.f, 15000.f); 
+            // In CF mode, we might need to adjust range if 'cutoff' comes from Log mapping.
+            // But for now let's assume 'cutoff' is the desired Hz.
+            
             float r = Clamp(VariableCrossFade(0.f, 0.8f, resoValue_, 0.9f), 0.f, 0.8f);
             combs_[LEFT_CHANNEL]->SetFrequency(f);
             combs_[LEFT_CHANNEL]->SetResonance(r);
@@ -269,6 +286,17 @@ private:
             break;
         }
         noise_.SetFreq(cutoff);
+    }
+
+    void SetFreq(float value)
+    {
+        float cutoff;
+        if (mode_ == FilterMode::CF) {
+             cutoff = Clamp(Map(value, 0.f, 1.f, 100.f, 15000.f), 100.f, 15000.f);
+        } else {
+             cutoff = Clamp(MapLog(value, 0.f, 1.f, 10.f, 22000.f), 10.f, 22000.f);
+        }
+        SetFreqHz(cutoff);
     }
 
     void SetReso(float value)
@@ -300,6 +328,8 @@ public:
         mode_ = lastMode_ = FilterMode::LP;
         freq_ = 22000.f;
         amp_ = Db2A(120);
+        oldCutoff_ = 0.f;
+        oldResonance_ = 0.f;
     }
     ~Filter()
     {
@@ -343,10 +373,40 @@ public:
         }
 
         float r = Modulate(patchCtrls_->filterResonance, patchCtrls_->filterResonanceModAmount, patchState_->modValue, patchCtrls_->filterResonanceCvAmount, patchCvs_->filterResonance, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
-        SetReso(r);
+        ParameterInterpolator resoParam(&oldResonance_, r, size, ParameterInterpolator::BY_SIZE);
 
         float c = Modulate(patchCtrls_->filterCutoff, patchCtrls_->filterCutoffModAmount, patchState_->modValue, patchCtrls_->filterCutoffCvAmount, patchCvs_->filterCutoff, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
-        SetFreq(c);
+        
+        // Optimize: Calculate Hz endpoints and interpolate, avoiding MapLog per sample.
+
+        // For LP/BP/HP, mapping is Log. For CF, mapping is Linear.
+        float startHz, endHz;
+        bool logInterpolation = false;
+
+        if (mode_ == FilterMode::CF) {
+             startHz = Clamp(Map(oldCutoff_, 0.f, 1.f, 100.f, 15000.f), 100.f, 15000.f);
+             endHz = Clamp(Map(c, 0.f, 1.f, 100.f, 15000.f), 100.f, 15000.f);
+             logInterpolation = false;
+        } else {
+             // To interpolate effectively in log domain, we interpolate the exponent.
+             // MapLog uses Map(val, 0, 1, log(min), log(max)) then exp.
+             // We can use the 0-1 control value 'c' and 'oldCutoff_' to interpolate the
+             // "Linear Input" of the MapLog function, BUT MapLog does the exp() at the end.
+             // So if we stick to interpolating the 0-1 value and calling fast_expf(Map(...))
+             // inside the loop, we save the Log calls but not the Exp call.
+             // MapLog implementation: return fast_expf(Map(value, aMin, aMax, bMin, bMax));
+             // We can pre-calculate bMin/bMax.
+             startHz = oldCutoff_; // Use this as the 0-1 value
+             endHz = c;            // Use this as the 0-1 value
+             logInterpolation = true;
+        }
+
+        ParameterInterpolator cutoffParam(&oldCutoff_, c, size, ParameterInterpolator::BY_SIZE);
+        
+        // Pre-calc log bounds for LP/BP/HP optimization
+        float bMin = fast_logf(10.f);
+
+        float bMax = fast_logf(22000.f);
 
         if (StartupPhase::STARTUP_DONE != patchState_->startupPhase)
         {
@@ -355,6 +415,25 @@ public:
 
         for (size_t i = 0; i < size; i++)
         {
+            SetReso(resoParam.Next());
+            
+            float currentControl = cutoffParam.Next();
+            float hz;
+            if (logInterpolation) {
+                // Inline MapLog logic: fast_expf(Map(val, 0, 1, bMin, bMax))
+                // Map(val, 0, 1, bMin, bMax) simplifies to: bMin + val * (bMax - bMin)
+                float exponent = bMin + currentControl * (bMax - bMin);
+                hz = fast_expf(exponent);
+                hz = Clamp(hz, 10.f, 22000.f);
+            } else {
+                // CF mode - linear Hz mapping (interpolating control 0-1 linearly results in linear Hz)
+                // We could interpolate control and map, or interpolate Hz.
+                // Since mapping is linear: Map(val, 0, 1, 100, 15000)
+                hz = Map(currentControl, 0.f, 1.f, 100.f, 15000.f);
+                hz = Clamp(hz, 100.f, 15000.f);
+            }
+            SetFreqHz(hz);
+
             float n = noise_.Process() * noiseLevel_;
 
             float lIn = Clamp(leftIn[i], -3.f, 3.f);

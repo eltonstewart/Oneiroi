@@ -341,10 +341,11 @@ public:
         SetDissonance(patchCtrls_->resonatorDissonance);
 
         float t = Modulate(patchCtrls_->resonatorTune, patchCtrls_->resonatorTuneModAmount, patchState_->modValue, patchCtrls_->resonatorTuneCvAmount, patchCvs_->resonatorTune, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
-        ParameterInterpolator tuningParam(&oldTuning_, t, size);
+        ParameterInterpolator tuningParam(&oldTuning_, t, size, ParameterInterpolator::BY_SIZE);
 
         float f = Modulate(patchCtrls_->resonatorFeedback, patchCtrls_->resonatorFeedbackModAmount, patchState_->modValue, patchCtrls_->resonatorFeedbackCvAmount, patchCvs_->resonatorFeedback, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         SetFeedback(f);
+
 
         for (size_t i = 0; i < size; i++)
         {

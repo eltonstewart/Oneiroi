@@ -16,6 +16,7 @@ private:
   float detunes_[7];
   float volumes_[7];
   float oldFreq_;
+  float oldVol_;
   float detune_;
 
 public:
@@ -28,6 +29,7 @@ public:
             volumes_[i] = 0;
         }
         detune_ = 0;
+        oldVol_ = 0.0f;
     }
     ~SuperSaw()
     {
@@ -92,18 +94,20 @@ public:
         delete obj;
     }
 
-    void Process(float freq, FloatArray output)
+    void Process(float freq, FloatArray output, float targetVol)
     {
         size_t size = output.getSize();
 
-        ParameterInterpolator freqParam(&oldFreq_, freq, size);
+        ParameterInterpolator freqParam(&oldFreq_, freq, size, ParameterInterpolator::BY_SIZE);
+        ParameterInterpolator volParam(&oldVol_, targetVol, size, ParameterInterpolator::BY_SIZE);
 
         for (size_t i = 0; i < size; i++)
         {
             SetFreq(freqParam.Next());
+            float v = volParam.Next();
             for (size_t j = 0; j < 7; j++)
             {
-                output[i] += oscs_[j]->generate() * volumes_[j];
+                output[i] += oscs_[j]->generate() * volumes_[j] * v;
             }
         }
 
@@ -170,9 +174,10 @@ public:
         float d = Modulate(patchCtrls_->oscDetune, patchCtrls_->oscDetuneModAmount, patchState_->modValue, patchCtrls_->oscDetuneCvAmount, patchCvs_->oscDetune, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         SetDetune(d);
 
-        saws_[LEFT_CHANNEL]->Process(f, output.getSamples(LEFT_CHANNEL));
-        saws_[RIGHT_CHANNEL]->Process(f, output.getSamples(RIGHT_CHANNEL));
+        float vol = Modulate(patchCtrls_->osc2Vol, patchCtrls_->osc2VolModAmount, patchState_->modValue, patchCtrls_->osc2VolCvAmount, patchCvs_->osc2Vol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
+        float targetVol = vol * kOScSuperSawGain;
 
-        output.multiply(patchCtrls_->osc2Vol * kOScSuperSawGain);
+        saws_[LEFT_CHANNEL]->Process(f, output.getSamples(LEFT_CHANNEL), targetVol);
+        saws_[RIGHT_CHANNEL]->Process(f, output.getSamples(RIGHT_CHANNEL), targetVol);
     }
 };

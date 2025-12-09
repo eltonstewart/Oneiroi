@@ -27,6 +27,7 @@ private:
     float phase_;
     float incR_;
     float xi_;
+    float oldVol_;
 
 public:
     StereoWaveTableOscillator(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState, WaveTableBuffer* wtBuffer)
@@ -43,6 +44,7 @@ public:
 
         oldOffset_ = 0;
         xi_ = 1.f / patchState_->blockSize;
+        oldVol_ = 0.0f;
 
         for (size_t i = 0; i < 2; i++)
         {
@@ -86,12 +88,15 @@ public:
         {
             f = oldFreq_;
         }
-        ParameterInterpolator freqParam(&oldFreq_, f, size);
+        ParameterInterpolator freqParam(&oldFreq_, f, size, ParameterInterpolator::BY_SIZE);
 
         float o = Modulate(patchCtrls_->oscDetune, patchCtrls_->oscDetuneModAmount, patchState_->modValue, patchCtrls_->oscDetuneCvAmount, patchCvs_->oscDetune, 0, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
-        ParameterInterpolator offsetParam(&oldOffset_, o, size);
+        ParameterInterpolator offsetParam(&oldOffset_, o, size, ParameterInterpolator::BY_SIZE);
+        float vol = Modulate(patchCtrls_->osc2Vol, patchCtrls_->osc2VolModAmount, patchState_->modValue, patchCtrls_->osc2VolCvAmount, patchCvs_->osc2Vol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
+        ParameterInterpolator volParam(&oldVol_, vol * kOScWaveTableGain, size, ParameterInterpolator::BY_SIZE);
 
         for (size_t i = 0; i < size; i++)
+
         {
             phase_ += freqParam.Next() * incR_;
             if (phase_ >= kWaveTableLength)
@@ -118,8 +123,9 @@ public:
             left = filters_[LEFT_CHANNEL]->process(left);
             right = filters_[RIGHT_CHANNEL]->process(right);
 
-            output.getSamples(LEFT_CHANNEL)[i] = left * patchCtrls_->osc2Vol * kOScWaveTableGain;
-            output.getSamples(RIGHT_CHANNEL)[i] = right * patchCtrls_->osc2Vol * kOScWaveTableGain;
+            float vol = volParam.Next();
+            output.getSamples(LEFT_CHANNEL)[i] = left * vol;
+            output.getSamples(RIGHT_CHANNEL)[i] = right * vol;
         }
     }
 };

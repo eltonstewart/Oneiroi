@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Oneiroi.h"
+#include "TechnoMachine.h"
 #include "ParamController.h"
 #include "Midi.h"
 #include "Led.h"
@@ -192,6 +192,10 @@ public:
         patchCtrls_->looperLengthModAmount = 0.f;
         patchCtrls_->looperSpeedModAmount = 0.f;
         patchCtrls_->looperStartModAmount = 0.f;
+        patchCtrls_->looperVolModAmount = 0.f; // Added
+        patchCtrls_->osc1VolModAmount = 0.f; // Added
+        patchCtrls_->osc2VolModAmount = 0.f; // Added
+        patchCtrls_->inputVolModAmount = 0.f; // Added
         patchCtrls_->oscDetuneModAmount = 0.f;
         patchCtrls_->oscPitchModAmount = 0.f;
         patchCtrls_->filterCutoffModAmount = 0.5f;
@@ -207,6 +211,10 @@ public:
         patchCtrls_->looperSpeedCvAmount = 1.f;
         patchCtrls_->looperStartCvAmount = 1.f;
         patchCtrls_->looperLengthCvAmount = 1.f;
+        patchCtrls_->looperVolCvAmount = 1.f; // Added
+        patchCtrls_->osc1VolCvAmount = 1.f; // Added
+        patchCtrls_->osc2VolCvAmount = 1.f; // Added
+        patchCtrls_->inputVolCvAmount = 1.f; // Added
         patchCtrls_->oscPitchCvAmount = 1.f;
         patchCtrls_->oscDetuneCvAmount = 1.f;
         patchCtrls_->filterCutoffCvAmount = 1.f;
@@ -216,13 +224,13 @@ public:
 
         LoadConfig();
 
-        faders_[PARAM_FADER_IN_VOL] = FaderController::create(patchState_, &inputVol_);
+        faders_[PARAM_FADER_IN_VOL] = FaderController::create(patchState_, &inputVol_, &patchCtrls_->inputVolModAmount, &patchCtrls_->inputVolCvAmount);
         faders_[PARAM_FADER_LOOPER_VOL] =
-            FaderController::create(patchState_, &looperVol_);
+            FaderController::create(patchState_, &looperVol_, &patchCtrls_->looperVolModAmount, &patchCtrls_->looperVolCvAmount);
         faders_[PARAM_FADER_OSC1_VOL] =
-            FaderController::create(patchState_, &osc1Vol_);
+            FaderController::create(patchState_, &osc1Vol_, &patchCtrls_->osc1VolModAmount, &patchCtrls_->osc1VolCvAmount);
         faders_[PARAM_FADER_OSC2_VOL] =
-            FaderController::create(patchState_, &osc2Vol_);
+            FaderController::create(patchState_, &osc2Vol_, &patchCtrls_->osc2VolModAmount, &patchCtrls_->osc2VolCvAmount);
         faders_[PARAM_FADER_FILTER_VOL] =
             FaderController::create(patchState_, &patchCtrls_->filterVol);
         faders_[PARAM_FADER_RESONATOR_VOL] =
@@ -321,6 +329,10 @@ public:
             CvController::create(&patchCvs_->ambienceSpacetime, 0.995f);
         cvs_[PARAM_CV_AMBIENCE_DECAY] =
             CvController::create(&patchCvs_->ambienceDecay);
+        cvs_[PARAM_CV_LOOPER_VOL] = CvController::create(&patchCvs_->looperVol, 0.995f);
+        cvs_[PARAM_CV_OSC1_VOL] = CvController::create(&patchCvs_->osc1Vol, 0.995f);
+        cvs_[PARAM_CV_OSC2_VOL] = CvController::create(&patchCvs_->osc2Vol, 0.995f);
+        cvs_[PARAM_CV_INPUT_VOL] = CvController::create(&patchCvs_->inputVol, 0.995f);
 
         leds_[LED_INPUT] = Led::create(INPUT_LED_PARAM, LedType::LED_TYPE_PARAM);
         leds_[LED_INPUT_PEAK] = Led::create(INPUT_PEAK_LED_PARAM);
@@ -564,6 +576,10 @@ public:
             knobs_[PARAM_KNOB_OSC_PITCH]->SetValue(cfg[10] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Osc pitch mod amount
             knobs_[PARAM_KNOB_RESONATOR_FEEDBACK]->SetValue(cfg[11] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Resonator feedback mod amount
             knobs_[PARAM_KNOB_RESONATOR_TUNE]->SetValue(cfg[12] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Resonator tune mod amount
+            faders_[PARAM_FADER_IN_VOL]->SetValue(cfg[13] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Input vol mod amount
+            faders_[PARAM_FADER_LOOPER_VOL]->SetValue(cfg[14] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Looper vol mod amount
+            faders_[PARAM_FADER_OSC1_VOL]->SetValue(cfg[15] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Osc1 vol mod amount
+            faders_[PARAM_FADER_OSC2_VOL]->SetValue(cfg[16] / 8192.f, LockableParamName::PARAM_LOCKABLE_MOD); // Osc2 vol mod amount
         }
         Resource::destroy(resource);
     }
@@ -585,6 +601,10 @@ public:
             //knobs_[PARAM_KNOB_OSC_PITCH]->SetValue(cfg[10] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Osc pitch cv amount
             knobs_[PARAM_KNOB_RESONATOR_FEEDBACK]->SetValue(cfg[11] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Resonator feedback cv amount
             knobs_[PARAM_KNOB_RESONATOR_TUNE]->SetValue(cfg[12] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Resonator tune cv amount
+            faders_[PARAM_FADER_IN_VOL]->SetValue(cfg[13] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Input vol cv amount
+            faders_[PARAM_FADER_LOOPER_VOL]->SetValue(cfg[14] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Looper vol cv amount
+            faders_[PARAM_FADER_OSC1_VOL]->SetValue(cfg[15] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Osc1 vol cv amount
+            faders_[PARAM_FADER_OSC2_VOL]->SetValue(cfg[16] / 8192.f, LockableParamName::PARAM_LOCKABLE_CV); // Osc2 vol cv amount
         }
         Resource::destroy(resource);
     }
@@ -663,6 +683,10 @@ public:
             values[10] = patchCtrls_->oscPitchModAmount;
             values[11] = patchCtrls_->resonatorFeedbackModAmount;
             values[12] = patchCtrls_->resonatorTuneModAmount;
+            values[13] = patchCtrls_->inputVolModAmount;
+            values[14] = patchCtrls_->looperVolModAmount;
+            values[15] = patchCtrls_->osc1VolModAmount;
+            values[16] = patchCtrls_->osc2VolModAmount;
             break;
         case FUNC_MODE_CV:
             values[0] = patchCtrls_->ambienceDecayCvAmount;
@@ -678,6 +702,10 @@ public:
             values[10] = 1.f; //patchCtrls_->oscPitchCvAmount;
             values[11] = patchCtrls_->resonatorFeedbackCvAmount;
             values[12] = patchCtrls_->resonatorTuneCvAmount;
+            values[13] = patchCtrls_->inputVolCvAmount;
+            values[14] = patchCtrls_->looperVolCvAmount;
+            values[15] = patchCtrls_->osc1VolCvAmount;
+            values[16] = patchCtrls_->osc2VolCvAmount;
             break;
 
         default:

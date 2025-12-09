@@ -8,7 +8,7 @@
 #include <cmath>
 
 //#define USE_RECORD_THRESHOLD
-#define MAX_PATCH_SETTINGS 16 // Max number of available MIDI channels
+#define MAX_PATCH_SETTINGS 17 // Increased to accommodate 4 new volume mod/CV parameters in Phase 1B
 #define PATCH_SETTINGS_NAME "technomachine"
 #define PATCH_VERSION_MAJOR 1
 #define PATCH_VERSION_MINOR 1
@@ -184,9 +184,15 @@ constexpr int kHoldLimit = 75; // Samples waited for a pressed button to be cons
 struct PatchCtrls
 {
     float inputVol;
+    float inputVolCvAmount;
+    float inputVolModAmount;
 
     float looperVol;
+
+    float looperVolCvAmount;
+    float looperVolModAmount;
     float looperSos;
+
     float looperFilter;
     float looperSpeed;
     float looperSpeedModAmount;
@@ -201,8 +207,13 @@ struct PatchCtrls
     float looperResampling;
 
     float osc1Vol;
+    float osc1VolCvAmount;
+    float osc1VolModAmount;
     float osc2Vol;
+    float osc2VolCvAmount;
+    float osc2VolModAmount;
     float oscOctave;
+
     float oscUnison;
     float oscPitch;
     float oscPitchModAmount;
@@ -260,7 +271,12 @@ struct PatchCtrls
 
 struct PatchCvs
 {
+    float looperVol;
+    float osc1Vol;
+    float osc2Vol;
+    float inputVol;
     float looperSpeed;
+
     float looperStart;
     float looperLength;
     float oscPitch;

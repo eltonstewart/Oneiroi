@@ -50,6 +50,8 @@ private:
 
     FilterPosition filterPosition_, lastFilterPosition_;
 
+    float oldInputVol_;
+
 public:
     Oneiroi(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState)
     {
@@ -86,6 +88,7 @@ public:
 
         inputDcFilter_ = StereoDcBlockingFilter::create();
         outputDcFilter_ = StereoDcBlockingFilter::create();
+        oldInputVol_ = 0.0f;
     }
     ~Oneiroi()
     {
@@ -148,7 +151,15 @@ public:
         modulation_->Process();
 
         input_->copyFrom(buffer);
-        input_->multiply(patchCtrls_->inputVol);
+        float vol = Modulate(patchCtrls_->inputVol, patchCtrls_->inputVolModAmount, patchState_->modValue, patchCtrls_->inputVolCvAmount, patchCvs_->inputVol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
+        ParameterInterpolator inputVolParam(&oldInputVol_, vol, size, ParameterInterpolator::BY_SIZE);
+        for (size_t i = 0; i < size; i++)
+        {
+            float vol = inputVolParam.Next();
+
+            input_->getSamples(LEFT_CHANNEL)[i] *= vol;
+            input_->getSamples(RIGHT_CHANNEL)[i] *= vol;
+        }
 
         if (patchCtrls_->looperResampling)
         {

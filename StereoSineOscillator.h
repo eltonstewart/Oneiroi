@@ -16,6 +16,7 @@ private:
     Schmitt trigger_;
 
     float oldFreqs_[2];
+    float oldVol_;
 
     bool fadeOut_, fadeIn_;
     float sine1Volume_, sine2Volume_;
@@ -57,6 +58,7 @@ public:
         fadeIn_ = false;
         sine1Volume_ = 0.5f;
         sine2Volume_ = 0.5f;
+        oldVol_ = 0.0f;
     }
     ~StereoSineOscillator()
     {
@@ -93,9 +95,13 @@ public:
         float f[2];
         f[0] = Clamp(patchCtrls_->oscPitch, kOscFreqMin, kOscFreqMax);
         f[1] = Clamp(f[0] * u, kOscFreqMin, kOscFreqMax);
-        ParameterInterpolator freqParams[2] = {ParameterInterpolator(&oldFreqs_[0], f[0], size), ParameterInterpolator(&oldFreqs_[1], f[1], size)};
+        ParameterInterpolator freqParams[2] = {ParameterInterpolator(&oldFreqs_[0], f[0], size, ParameterInterpolator::BY_SIZE), ParameterInterpolator(&oldFreqs_[1], f[1], size, ParameterInterpolator::BY_SIZE)};
+        
+        float vol = Modulate(patchCtrls_->osc1Vol, patchCtrls_->osc1VolModAmount, patchState_->modValue, patchCtrls_->osc1VolCvAmount, patchCvs_->osc1Vol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
+        ParameterInterpolator volParam(&oldVol_, vol * kOScSineGain, size, ParameterInterpolator::BY_SIZE);
 
         for (size_t i = 0; i < size; i++)
+
         {
             for (size_t j = 0; j < 2; j++)
             {
@@ -118,7 +124,7 @@ public:
 
             float out = oscs_[0]->generate() * sine1Volume_ + oscs_[1]->generate() * sine2Volume_;
 
-            out *= patchCtrls_->osc1Vol * kOScSineGain;
+            out *= volParam.Next();
 
             output.getSamples(LEFT_CHANNEL).setElement(i, out);
             output.getSamples(RIGHT_CHANNEL).setElement(i, out);

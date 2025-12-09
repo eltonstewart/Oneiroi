@@ -38,6 +38,7 @@ private:
     float newLength_, newStart_;
     float fadePhase_, fadeSamples_, fadeSamplesR_;
     float fadeThreshold_;
+    float oldVol_;
 
     bool triggered_;
     bool boc_;
@@ -407,6 +408,7 @@ public:
         triggerFadeIn_ = false;
         oldStartValue_ = 0;
         oldLengthValue_ = 1.f;
+        oldVol_ = 0.0f;
 
         for (size_t i = 0; i < 2; i++)
         {
@@ -457,19 +459,20 @@ public:
         }
 
         MapSpeed();
-        ParameterInterpolator speedParam(&oldSpeedValue_, speedValue_, kLooperInterpolationBlocks);
+        ParameterInterpolator speedParam(&oldSpeedValue_, speedValue_, kLooperInterpolationBlocks, ParameterInterpolator::BY_SIZE);
         float rs = Modulate(speedParam.Next(), patchCtrls_->looperSpeedModAmount, patchState_->modValue, patchCtrls_->looperSpeedCvAmount, patchCvs_->looperSpeed, -2.f, 2.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         SetSpeed(rs);
 
-        ParameterInterpolator startParam(&oldStartValue_, patchCtrls_->looperStart, kLooperInterpolationBlocks);
+        ParameterInterpolator startParam(&oldStartValue_, patchCtrls_->looperStart, kLooperInterpolationBlocks, ParameterInterpolator::BY_SIZE);
         float t = Modulate(startParam.Next(), patchCtrls_->looperStartModAmount, patchState_->modValue, patchCtrls_->looperStartCvAmount, patchCvs_->looperStart, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         SetStart(t);
 
-        ParameterInterpolator lengthParam(&oldLengthValue_, patchCtrls_->looperLength, kLooperInterpolationBlocks);
+        ParameterInterpolator lengthParam(&oldLengthValue_, patchCtrls_->looperLength, kLooperInterpolationBlocks, ParameterInterpolator::BY_SIZE);
         float l = Modulate(lengthParam.Next(), patchCtrls_->looperLengthModAmount, patchState_->modValue, patchCtrls_->looperLengthCvAmount, patchCvs_->looperLength, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         SetLength(l);
 
         SetFilter(patchCtrls_->looperFilter);
+
 
         if (StartupPhase::STARTUP_DONE != patchState_->startupPhase)
         {
@@ -508,7 +511,16 @@ public:
         }
         else
         {
-            output.multiply(patchCtrls_->looperVol * kLooperMakeupGain);
+            float vol = Modulate(patchCtrls_->looperVol, patchCtrls_->looperVolModAmount, patchState_->modValue, patchCtrls_->looperVolCvAmount, patchCvs_->looperVol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
+            ParameterInterpolator volParam(&oldVol_, vol * kLooperMakeupGain, output.getSize(), ParameterInterpolator::BY_SIZE);
+            for (size_t i = 0; i < output.getSize(); i++)
+            {
+                float vol = volParam.Next();
+
+                output.getSamples(LEFT_CHANNEL)[i] *= vol;
+                output.getSamples(RIGHT_CHANNEL)[i] *= vol;
+            }
+
             limiter_->ProcessSoft(output, output);
         }
     }
