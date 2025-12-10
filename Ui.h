@@ -165,7 +165,7 @@ public:
         patchState_->startupPhase = StartupPhase::STARTUP_1;
         patchState_->softTakeover = false;
         patchState_->modAttenuverters = false;
-        patchState_->cvAttenuverters = false;
+        patchState_->cvAttenuverters = true;  // Bipolar CV attenuverters (-1 to +1)
 
         for (size_t i = 0; i < PARAM_KNOB_LAST + PARAM_FADER_LAST; i++) {
             patchState_->moving[i] = false;
@@ -536,7 +536,7 @@ public:
             patchState_->speedZero = 2192.f / 4041.f;
             patchState_->softTakeover = false;
             patchState_->modAttenuverters = false;
-            patchState_->cvAttenuverters = false;
+            patchState_->cvAttenuverters = true;  // Bipolar CV attenuverters (-1 to +1)
         }
         Resource::destroy(resource);
     }
