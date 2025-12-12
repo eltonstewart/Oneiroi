@@ -24,7 +24,7 @@ private:
     PatchCvs* patchCvs_;
     PatchState* patchState_;
 
-    DelayLine* lines_[kEchoTaps];
+    DelayLine* lines_[2]; // Optimized: Left and Right shared buffers
     DjFilter* filter_;
     EnvFollower* ef_[2];
     Compressor* comp_[2];
@@ -149,9 +149,14 @@ public:
         patchCvs_ = patchCvs;
         patchState_ = patchState;
 
-        for (size_t i = 0; i < kEchoTaps; i++)
+        // Optimized: Create only 2 delay lines (Left/Right)
+        for (size_t i = 0; i < 2; i++)
         {
             lines_[i] = DelayLine::create(kEchoMaxLengthSamples);
+        }
+
+        for (size_t i = 0; i < kEchoTaps; i++)
+        {
             tapsTimes_[i] = kEchoMaxLengthSamples - 1;
             SetMaxTapTime(i, tapsTimes_[i] * kEchoTapsRatios[i]);
             levels_[i] = 0;
@@ -179,7 +184,8 @@ public:
     }
     ~Echo()
     {
-        for (size_t i = 0; i < kEchoTaps; i++)
+        // Destroy only the 2 lines
+        for (size_t i = 0; i < 2; i++)
         {
             DelayLine::destroy(lines_[i]);
         }
@@ -234,20 +240,22 @@ public:
             // internal (for pitch shifting effect).
             if (externalClock_)
             {
-                outs_[TAP_LEFT_A] = lines_[TAP_LEFT_A]->read(tapsTimes_[TAP_LEFT_A], newTapsTimes_[TAP_LEFT_A], x); // A
-                outs_[TAP_LEFT_B] = lines_[TAP_LEFT_B]->read(tapsTimes_[TAP_LEFT_B], newTapsTimes_[TAP_LEFT_B], x); // B
-                outs_[TAP_RIGHT_A] = lines_[TAP_RIGHT_A]->read(tapsTimes_[TAP_RIGHT_A], newTapsTimes_[TAP_RIGHT_A], x); // A
-                outs_[TAP_RIGHT_B] = lines_[TAP_RIGHT_B]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x); // B
+                // Left Taps read from lines_[LEFT_CHANNEL]
+                outs_[TAP_LEFT_A] = lines_[LEFT_CHANNEL]->read(tapsTimes_[TAP_LEFT_A], newTapsTimes_[TAP_LEFT_A], x);
+                outs_[TAP_LEFT_B] = lines_[LEFT_CHANNEL]->read(tapsTimes_[TAP_LEFT_B], newTapsTimes_[TAP_LEFT_B], x);
+                // Right Taps read from lines_[RIGHT_CHANNEL]
+                outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_A], newTapsTimes_[TAP_RIGHT_A], x);
+                outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x);
 
                 x += xi_;
             }
             else
             {
                 SetDensity(d);
-                outs_[TAP_LEFT_A] = lines_[TAP_LEFT_A]->read(newTapsTimes_[TAP_LEFT_A]); // A
-                outs_[TAP_LEFT_B] = lines_[TAP_LEFT_B]->read(newTapsTimes_[TAP_LEFT_B]); // B
-                outs_[TAP_RIGHT_A] = lines_[TAP_RIGHT_A]->read(newTapsTimes_[TAP_RIGHT_A]); // A
-                outs_[TAP_RIGHT_B] = lines_[TAP_RIGHT_B]->read(newTapsTimes_[TAP_RIGHT_B]); // B
+                outs_[TAP_LEFT_A] = lines_[LEFT_CHANNEL]->read(newTapsTimes_[TAP_LEFT_A]);
+                outs_[TAP_LEFT_B] = lines_[LEFT_CHANNEL]->read(newTapsTimes_[TAP_LEFT_B]);
+                outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_A]);
+                outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_B]);
             }
 
             float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A]);
@@ -270,10 +278,9 @@ public:
             leftFb += leftFilter;
             rightFb += rightFilter;
 
-            lines_[TAP_LEFT_A]->write(leftFb);
-            lines_[TAP_LEFT_B]->write(leftFb);
-            lines_[TAP_RIGHT_A]->write(rightFb);
-            lines_[TAP_RIGHT_B]->write(rightFb);
+            // Write summed feedback to shared lines
+            lines_[LEFT_CHANNEL]->write(leftFb);
+            lines_[RIGHT_CHANNEL]->write(rightFb);
 
             float left = Mix2(outs_[TAP_LEFT_A], outs_[TAP_LEFT_B]);
             float right = Mix2(outs_[TAP_RIGHT_A], outs_[TAP_RIGHT_B]);
