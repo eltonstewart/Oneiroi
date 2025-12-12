@@ -185,6 +185,7 @@ public:
         patchCtrls_->filterPosition = 0.f;
         patchCtrls_->modType = 0.f;
         patchCtrls_->resonatorDissonance = 0.f;
+        patchCtrls_->effectType = 0.f;
         patchCtrls_->echoFilter = 0.55f; // Center is not 0.5
         patchCtrls_->ambienceAutoPan = 0.f;
 
@@ -273,7 +274,7 @@ public:
             &patchCtrls_->resonatorTuneCvAmount, 0.005f);
         knobs_[PARAM_KNOB_RESONATOR_FEEDBACK] =
             KnobController::create(patchState_, &patchCtrls_->resonatorFeedback,
-                NULL, &patchCtrls_->resonatorFeedbackModAmount,
+                &patchCtrls_->effectType, &patchCtrls_->resonatorFeedbackModAmount,
                 &patchCtrls_->resonatorFeedbackCvAmount);
 
         knobs_[PARAM_KNOB_ECHO_DENSITY] =
@@ -555,6 +556,7 @@ public:
             knobs_[PARAM_KNOB_OSC_PITCH]->SetValue(cfg[7] / 8192.f, LockableParamName::PARAM_LOCKABLE_ALT); // Octave
             knobs_[PARAM_KNOB_OSC_DETUNE]->SetValue(cfg[8] / 8192.f, LockableParamName::PARAM_LOCKABLE_ALT); // Unison
             knobs_[PARAM_KNOB_RESONATOR_TUNE]->SetValue(cfg[9] / 8192.f, LockableParamName::PARAM_LOCKABLE_ALT); // Reso dissonance
+            knobs_[PARAM_KNOB_RESONATOR_FEEDBACK]->SetValue(cfg[10] / 8192.f, LockableParamName::PARAM_LOCKABLE_ALT); // Effect type
         }
         Resource::destroy(resource);
     }
@@ -668,6 +670,7 @@ public:
             values[7] = octave_;
             values[8] = unison_;
             values[9] = patchCtrls_->resonatorDissonance;
+            values[10] = patchCtrls_->effectType;
             break;
         case FUNC_MODE_MOD:
             values[0] = patchCtrls_->ambienceDecayModAmount;
@@ -1026,6 +1029,9 @@ public:
 
             for (size_t i = 0; i < PARAM_KNOB_LAST; i++) {
                 knobs_[i]->SetFuncMode(patchState_->funcMode);
+            }
+            for (size_t i = 0; i < PARAM_FADER_LAST; i++) {
+                faders_[i]->SetFuncMode(patchState_->funcMode);
             }
             recordButton_->SetFuncMode(patchState_->funcMode);
             randomButton_->SetFuncMode(patchState_->funcMode);

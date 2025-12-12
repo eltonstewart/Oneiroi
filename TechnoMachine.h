@@ -8,6 +8,7 @@
 #include "Ambience.h"
 #include "Filter.h"
 #include "Resonator.h"
+#include "StereoWavefolder.h"
 #include "Echo.h"
 #include "Looper.h"
 #include "Schmitt.h"
@@ -30,7 +31,7 @@ private:
     StereoWaveTableOscillator* wt_;
     WaveTableBuffer* wtBuffer_;
     Filter* filter_;
-    Resonator* resonator_;
+    StereoEffect* effects_[kNumEffects];
     Echo* echo_;
     Ambience* ambience_;
     Looper* looper_;
@@ -67,7 +68,8 @@ public:
         wt_ = StereoWaveTableOscillator::create(patchCtrls_, patchCvs_, patchState_, wtBuffer_);
 
         filter_ = Filter::create(patchCtrls_, patchCvs_, patchState_);
-        resonator_ = Resonator::create(patchCtrls_, patchCvs_, patchState_);
+        effects_[kEffectResonator] = Resonator::create(patchCtrls_, patchCvs_, patchState_);
+        effects_[kEffectWavefolder] = StereoWavefolder::create(patchCtrls_, patchCvs_, patchState_);
         echo_ = Echo::create(patchCtrls_, patchCvs_, patchState_);
         ambience_ = Ambience::create(patchCtrls_, patchCvs_, patchState_);
 
@@ -102,7 +104,8 @@ public:
         StereoSuperSaw::destroy(saw_);
         StereoWaveTableOscillator::destroy(wt_);
         Filter::destroy(filter_);
-        Resonator::destroy(resonator_);
+        StereoEffect::destroy(effects_[kEffectResonator]);
+        StereoEffect::destroy(effects_[kEffectWavefolder]);
         Echo::destroy(echo_);
         Ambience::destroy(ambience_);
         Modulation::destroy(modulation_);
@@ -209,7 +212,12 @@ public:
         {
             filter_->process(buffer, buffer);
         }
-        resonator_->process(buffer, buffer);
+        
+        int effectIndex = (int)(patchCtrls_->effectType * (kNumEffects - 0.001f));
+        if (effectIndex < 0) effectIndex = 0;
+        if (effectIndex >= kNumEffects) effectIndex = kNumEffects - 1;
+        effects_[effectIndex]->process(buffer, buffer);
+
         if (FilterPosition::POSITION_2 == filterPosition_)
         {
             filter_->process(buffer, buffer);

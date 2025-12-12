@@ -141,6 +141,11 @@ constexpr float kResoMakeupGain = 1.2f;
 constexpr int32_t kResoBufferSize = 2400;
 constexpr float kResoInfiniteFeedbackThreshold = 0.99f;
 constexpr float kResoInfiniteFeedbackLevel = 1.05f;
+constexpr float kWavefolderMakeupGain = 0.5f;
+
+constexpr int kEffectResonator = 0;
+constexpr int kEffectWavefolder = 1;
+constexpr int kNumEffects = 2;
 
 constexpr int32_t kEchoFadeSamples = 2400; // 50 ms @ audio rate
 constexpr int32_t kEchoMinLengthSamples = 480; // 10 ms @ audio rate
@@ -242,6 +247,7 @@ struct PatchCtrls
     float resonatorFeedbackModAmount;
     float resonatorFeedbackCvAmount;
     float resonatorDissonance;
+    float effectType;
 
     float echoVol;
     float echoRepeats;

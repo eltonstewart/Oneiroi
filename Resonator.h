@@ -6,6 +6,7 @@
 #include "EnvFollower.h"
 #include "DcBlockingFilter.h"
 #include "Compressor.h"
+#include "StereoEffect.h"
 
 class Pole
 {
@@ -170,7 +171,7 @@ private:
  *        https://www.native-instruments.com/de/reaktor-community/reaktor-user-library/entry/show/3431/
  *
  */
-class Resonator
+class Resonator : public StereoEffect
 {
 private:
     PatchCtrls* patchCtrls_;
@@ -330,7 +331,7 @@ public:
         delete obj;
     }
 
-    void process(AudioBuffer &input, AudioBuffer &output)
+    void process(AudioBuffer &input, AudioBuffer &output) override
     {
         size_t size = output.getSize();
         FloatArray leftIn = input.getSamples(LEFT_CHANNEL);
