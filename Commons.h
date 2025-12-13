@@ -78,7 +78,7 @@ constexpr int kLooperFadeSamples = 2400; // 50ms @ audio rate
 static const float kLooperFadeSamplesR = 1.f / kLooperFadeSamples;
 constexpr int kLooperTriggerFadeSamples = 240; // 5ms @ audio rate
 static const float kLooperTriggerFadeSamplesR = 1.f / kLooperTriggerFadeSamples;
-static const int32_t kLooperTotalBufferLength = 1 << 19; // 524288 samples for both channels (interleaved) = 5.46 seconds stereo buffer
+static const int32_t kLooperTotalBufferLength = 840000; // ~8.75 seconds stereo buffer (Increased from ~5.5s)
 //static const int32_t kLooperTotalBufferLength = 480000; // samples for both channels (interleaved) = ~8 seconds stereo buffer
 static const int32_t kLooperChannelBufferLength = kLooperTotalBufferLength / 2;
 constexpr float kLooperNoiseLevel = 0.2f;

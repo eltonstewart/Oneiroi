@@ -447,7 +447,7 @@ public:
     {
         input.multiply(patchCtrls_->looperResampling ? kLooperResampleGain : kLooperInputGain);
 
-        if (ClockSource::CLOCK_SOURCE_EXTERNAL == patchState_->clockSource && (trigger_.Process(patchState_->clockReset || patchState_->clockTick)))
+        if (ClockSource::CLOCK_SOURCE_EXTERNAL == patchState_->clockSource && (trigger_.Process(patchState_->clockReset)))
         {
             triggered_ = true;
         }
