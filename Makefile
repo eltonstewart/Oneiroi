@@ -26,7 +26,7 @@ store:
 	$(MAKE) -C $(OWL_DIR) $(MAKE_FLAGS) store SLOT=1
 
 native:
-	$(MAKE) -C $(OWL_DIR) -f native.mk $(MAKE_FLAGS) TOOLROOT= native
+	$(MAKE) -C $(OWL_DIR) $(MAKE_FLAGS) TOOLROOT= native
 
 run: native
 	$(OWL_DIR)/Build/Test/patch
