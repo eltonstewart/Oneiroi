@@ -37,10 +37,11 @@ private:
     float levels_[kEchoTaps], outs_[kEchoTaps];
     float tapsTimes_[kEchoTaps], newTapsTimes_[kEchoTaps], maxTapsTimes_[kEchoTaps];
     float repeats_, filterValue_;
-    float xi_;
 
     bool externalClock_;
     bool infinite_;
+    float tapBlendLeft_;
+    float tapBlendRight_;
 
     void SetTapTime(int idx, float time)
     {
@@ -166,10 +167,10 @@ public:
         echoDensity_ = 1.f;
         clockRatiosIndex_ = 0;
 
-        xi_ = 1.f / patchState_->blockSize;
-
         externalClock_ = false;
         infinite_ = false;
+        tapBlendLeft_ = 0.42f;
+        tapBlendRight_ = 0.58f;
 
         filter_ = DjFilter::create(patchState_->sampleRate);
 
@@ -207,22 +208,15 @@ public:
         delete obj;
     }
 
+    // Process entry point - dispatches to specialized version based on clock mode.
+    // Optimization: Branch hoisted outside loop to eliminate misprediction stalls.
     void process(AudioBuffer &input, AudioBuffer &output)
     {
         size_t size = output.getSize();
-        FloatArray leftIn = input.getSamples(LEFT_CHANNEL);
-        FloatArray rightIn = input.getSamples(RIGHT_CHANNEL);
-        FloatArray leftOut = output.getSamples(LEFT_CHANNEL);
-        FloatArray rightOut = output.getSamples(RIGHT_CHANNEL);
 
         SetFilter(patchCtrls_->echoFilter);
 
         float d = Modulate(patchCtrls_->echoDensity, patchCtrls_->echoDensityModAmount, patchState_->modValue, patchCtrls_->echoDensityCvAmount, patchCvs_->echoDensity, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
-        if (externalClock_)
-        {
-            SetDensity(d);
-        }
-
         float r = Modulate(patchCtrls_->echoRepeats, patchCtrls_->echoRepeatsModAmount, patchState_->modValue, patchCtrls_->echoRepeatsCvAmount, patchCvs_->echoRepeats, -1.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         SetRepeats(r);
 
@@ -231,35 +225,42 @@ public:
             return;
         }
 
-        float x = 0;
-
-        for (int i = 0; i < size; i++)
+        // Update density ONCE per block for internal clock (was being called every sample!)
+        // For external clock, SetDensity is called to handle clock ratio quantization.
+        if (externalClock_)
         {
-            // Using crossfade between two different tap times when the clock is
-            // external and a filtered density param for when the clock is
-            // internal (for pitch shifting effect).
-            if (externalClock_)
-            {
-                // Left Taps read from lines_[LEFT_CHANNEL]
-                outs_[TAP_LEFT_A] = lines_[LEFT_CHANNEL]->read(tapsTimes_[TAP_LEFT_A], newTapsTimes_[TAP_LEFT_A], x);
-                outs_[TAP_LEFT_B] = lines_[LEFT_CHANNEL]->read(tapsTimes_[TAP_LEFT_B], newTapsTimes_[TAP_LEFT_B], x);
-                // Right Taps read from lines_[RIGHT_CHANNEL]
-                outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_A], newTapsTimes_[TAP_RIGHT_A], x);
-                outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x);
+            SetDensity(d);
+            processExternalClock(input, output, size);
+        }
+        else
+        {
+            SetDensity(d);
+            processInternalClock(input, output, size);
+        }
+    }
 
-                x += xi_;
-            }
-            else
-            {
-                SetDensity(d);
-                outs_[TAP_LEFT_A] = lines_[LEFT_CHANNEL]->read(newTapsTimes_[TAP_LEFT_A]);
-                outs_[TAP_LEFT_B] = lines_[LEFT_CHANNEL]->read(newTapsTimes_[TAP_LEFT_B]);
-                outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_A]);
-                outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_B]);
-            }
+private:
+    // External clock: tap times crossfade smoothly between old and new values.
+    void processExternalClock(AudioBuffer &input, AudioBuffer &output, size_t size)
+    {
+        FloatArray leftIn = input.getSamples(LEFT_CHANNEL);
+        FloatArray rightIn = input.getSamples(RIGHT_CHANNEL);
+        FloatArray leftOut = output.getSamples(LEFT_CHANNEL);
+        FloatArray rightOut = output.getSamples(RIGHT_CHANNEL);
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A]);
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B]);
+        float x = 0;
+        float xi = 1.f / static_cast<float>(size);
+
+        for (size_t i = 0; i < size; i++)
+        {
+            outs_[TAP_LEFT_A] = lines_[LEFT_CHANNEL]->read(tapsTimes_[TAP_LEFT_A], newTapsTimes_[TAP_LEFT_A], x);
+            outs_[TAP_LEFT_B] = lines_[LEFT_CHANNEL]->read(tapsTimes_[TAP_LEFT_B], newTapsTimes_[TAP_LEFT_B], x);
+            outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_A], newTapsTimes_[TAP_RIGHT_A], x);
+            outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x);
+            x += xi;
+
+            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
+            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
 
             if (infinite_)
             {
@@ -270,20 +271,17 @@ public:
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);
 
-            float leftFilter;
-            float rightFilter;
-
+            float leftFilter, rightFilter;
             filter_->Process(lIn, rIn, leftFilter, rightFilter);
 
             leftFb += leftFilter;
             rightFb += rightFilter;
 
-            // Write summed feedback to shared lines
             lines_[LEFT_CHANNEL]->write(leftFb);
             lines_[RIGHT_CHANNEL]->write(rightFb);
 
-            float left = Mix2(outs_[TAP_LEFT_A], outs_[TAP_LEFT_B]);
-            float right = Mix2(outs_[TAP_RIGHT_A], outs_[TAP_RIGHT_B]);
+            float left = LinearCrossFade(outs_[TAP_LEFT_A], outs_[TAP_LEFT_B], tapBlendLeft_);
+            float right = LinearCrossFade(outs_[TAP_RIGHT_A], outs_[TAP_RIGHT_B], tapBlendRight_);
 
             left = comp_[LEFT_CHANNEL]->process(left) * kEchoMakeupGain;
             right = comp_[RIGHT_CHANNEL]->process(right) * kEchoMakeupGain;
@@ -292,12 +290,56 @@ public:
             rightOut[i] = CheapEqualPowerCrossFade(rIn, right, patchCtrls_->echoVol, 1.8f);
         }
 
-        if (externalClock_)
+        for (size_t j = 0; j < kEchoTaps; j++)
         {
-            for (size_t j = 0; j < kEchoTaps; j++)
+            tapsTimes_[j] = newTapsTimes_[j];
+        }
+    }
+
+    // Internal clock: direct tap reads, no crossfade needed.
+    void processInternalClock(AudioBuffer &input, AudioBuffer &output, size_t size)
+    {
+        FloatArray leftIn = input.getSamples(LEFT_CHANNEL);
+        FloatArray rightIn = input.getSamples(RIGHT_CHANNEL);
+        FloatArray leftOut = output.getSamples(LEFT_CHANNEL);
+        FloatArray rightOut = output.getSamples(RIGHT_CHANNEL);
+
+        for (size_t i = 0; i < size; i++)
+        {
+            outs_[TAP_LEFT_A] = lines_[LEFT_CHANNEL]->read(newTapsTimes_[TAP_LEFT_A]);
+            outs_[TAP_LEFT_B] = lines_[LEFT_CHANNEL]->read(newTapsTimes_[TAP_LEFT_B]);
+            outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_A]);
+            outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_B]);
+
+            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
+            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
+
+            if (infinite_)
             {
-                tapsTimes_[j] = newTapsTimes_[j];
+                leftFb *= 1.08f - ef_[LEFT_CHANNEL]->process(leftFb);
+                rightFb *= 1.08f - ef_[RIGHT_CHANNEL]->process(rightFb);
             }
+
+            float lIn = Clamp(leftIn[i], -3.f, 3.f);
+            float rIn = Clamp(rightIn[i], -3.f, 3.f);
+
+            float leftFilter, rightFilter;
+            filter_->Process(lIn, rIn, leftFilter, rightFilter);
+
+            leftFb += leftFilter;
+            rightFb += rightFilter;
+
+            lines_[LEFT_CHANNEL]->write(leftFb);
+            lines_[RIGHT_CHANNEL]->write(rightFb);
+
+            float left = LinearCrossFade(outs_[TAP_LEFT_A], outs_[TAP_LEFT_B], tapBlendLeft_);
+            float right = LinearCrossFade(outs_[TAP_RIGHT_A], outs_[TAP_RIGHT_B], tapBlendRight_);
+
+            left = comp_[LEFT_CHANNEL]->process(left) * kEchoMakeupGain;
+            right = comp_[RIGHT_CHANNEL]->process(right) * kEchoMakeupGain;
+
+            leftOut[i] = CheapEqualPowerCrossFade(lIn, left, patchCtrls_->echoVol, 1.8f);
+            rightOut[i] = CheapEqualPowerCrossFade(rIn, right, patchCtrls_->echoVol, 1.8f);
         }
     }
 };

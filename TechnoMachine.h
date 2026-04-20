@@ -39,7 +39,6 @@ private:
 
     Modulation* modulation_;
 
-    AudioBuffer* input_;
     AudioBuffer* resample_;
     AudioBuffer* osc1Out_;
     AudioBuffer* osc2Out_;
@@ -77,7 +76,6 @@ public:
 
         limiter_ = Limiter::create();
 
-        input_ = AudioBuffer::create(2, patchState_->blockSize);
         resample_ = AudioBuffer::create(2, patchState_->blockSize);
         osc1Out_ = AudioBuffer::create(2, patchState_->blockSize);
         osc2Out_ = AudioBuffer::create(2, patchState_->blockSize);
@@ -94,7 +92,6 @@ public:
     }
     ~Oneiroi()
     {
-        AudioBuffer::destroy(input_);
         AudioBuffer::destroy(resample_);
         AudioBuffer::destroy(osc1Out_);
         AudioBuffer::destroy(osc2Out_);
@@ -136,32 +133,41 @@ public:
 
         const int size = buffer.getSize();
 
-        // Input leds.
-        for (size_t i = 0; i < size; i++)
+        // Input leds - branch hoisted outside loop for better pipelining.
+        if (patchCtrls_->looperResampling)
         {
-            float l;
-            if (patchCtrls_->looperResampling)
+            FloatArray resampleLeft = resample_->getSamples(LEFT_CHANNEL);
+            FloatArray resampleRight = resample_->getSamples(RIGHT_CHANNEL);
+            for (int i = 0; i < size; i++)
             {
-                l = Mix2(inEnvFollower_[0]->process(resample_->getSamples(LEFT_CHANNEL)[i]), inEnvFollower_[1]->process(resample_->getSamples(RIGHT_CHANNEL)[i])) * kLooperResampleLedAtt;
+                float l = Mix2(inEnvFollower_[0]->process(resampleLeft[i]), inEnvFollower_[1]->process(resampleRight[i])) * kLooperResampleLedAtt;
+                patchState_->inputLevel[i] = l;
             }
-            else
+        }
+        else
+        {
+            for (int i = 0; i < size; i++)
             {
-                l = Mix2(inEnvFollower_[0]->process(left[i]), inEnvFollower_[1]->process(right[i]));
+                float l = Mix2(inEnvFollower_[0]->process(left[i]), inEnvFollower_[1]->process(right[i]));
+                patchState_->inputLevel[i] = l;
             }
-            patchState_->inputLevel[i] = l;
         }
 
         modulation_->Process();
 
-        input_->copyFrom(buffer);
+        // Input volume processing - store original input on stack, scale in-place, add back after looper.
+        // Optimization: eliminates input_ AudioBuffer allocation (~512 bytes RAM).
         float vol = Modulate(patchCtrls_->inputVol, patchCtrls_->inputVolModAmount, patchState_->modValue, patchCtrls_->inputVolCvAmount, patchCvs_->inputVol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
         ParameterInterpolator inputVolParam(&oldInputVol_, vol, size, ParameterInterpolator::BY_SIZE);
-        for (size_t i = 0; i < size; i++)
+        
+        // Save original input and apply volume in single loop.
+        float inputL[AUDIO_MAX_BLOCK_SIZE];
+        float inputR[AUDIO_MAX_BLOCK_SIZE];
+        for (int i = 0; i < size; i++)
         {
-            float vol = inputVolParam.Next();
-
-            input_->getSamples(LEFT_CHANNEL)[i] *= vol;
-            input_->getSamples(RIGHT_CHANNEL)[i] *= vol;
+            float v = inputVolParam.Next();
+            inputL[i] = left[i] * v;
+            inputR[i] = right[i] * v;
         }
 
         if (patchCtrls_->looperResampling)
@@ -172,7 +178,13 @@ public:
         {
             looper_->Process(buffer, buffer);
         }
-        buffer.add(*input_);
+        
+        // Mix scaled input back into buffer.
+        for (int i = 0; i < size; i++)
+        {
+            left[i] += inputL[i];
+            right[i] += inputR[i];
+        }
 
         sine_->Process(*osc1Out_);
         buffer.add(*osc1Out_);

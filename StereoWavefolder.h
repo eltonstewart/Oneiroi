@@ -24,9 +24,9 @@ private:
 
     static inline float Saturate(float in, float drive)
     {
-        float x = in * (1.0f + drive * 9.0f);
+        float x = in * (1.0f + drive * 15.0f); // Increased from 9.0f for more saturation
         float out = tanhf(x);
-        return out * (1.0f + drive * 2.0f);
+        return out * (1.0f + drive * 3.0f); // Increased from 2.0f for more gain
     }
 
 public:

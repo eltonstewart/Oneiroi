@@ -49,9 +49,10 @@ public:
         for (size_t i = 0; i < 2; i++)
         {
             filters_[i] = BiquadFilter::create(patchState_->sampleRate);
-            filters_[i]->setLowShelf(2000, 1);
+            filters_[i]->setLowShelf(800, 0.8);
             ef_[i] = EnvFollower::create();
         }
+        oldFreq_ = kOscFreqMin;
     }
     ~StereoWaveTableOscillator()
     {
@@ -109,10 +110,13 @@ public:
             float p1 = q * kWaveTableStepLength + phase_;
             float p2 = p1 + kWaveTableStepLength;
             float x = Clamp((p - kWaveTableNofTablesR * q) / kWaveTableNofTablesR);
+            const float stereoOffset = kWaveTableStepLength * 0.015f;
 
             float left;
             float right;
-            wtBuffer_->ReadLinear(p1, p2, x, left, right);
+            float dummy;
+            wtBuffer_->ReadLinear(p1 - stereoOffset, p2 - stereoOffset, x, left, dummy);
+            wtBuffer_->ReadLinear(p1 + stereoOffset, p2 + stereoOffset, x, dummy, right);
 
             left *= Map(ef_[LEFT_CHANNEL]->process(left), 0.f, 0.3f, kOScWaveTablePreGain, 1.f);
             right *= Map(ef_[RIGHT_CHANNEL]->process(right), 0.f, 0.3f, kOScWaveTablePreGain, 1.f);
@@ -122,6 +126,10 @@ public:
 
             left = filters_[LEFT_CHANNEL]->process(left);
             right = filters_[RIGHT_CHANNEL]->process(right);
+
+            // Keep the wavetable lively without smearing it with a second full filter step.
+            left *= 0.96f;
+            right *= 0.96f;
 
             float vol = volParam.Next();
             output.getSamples(LEFT_CHANNEL)[i] = left * vol;

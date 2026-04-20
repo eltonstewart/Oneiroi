@@ -434,16 +434,17 @@ public:
             }
             SetFreqHz(hz);
 
-            float n = noise_.Process() * noiseLevel_;
+            float nLeft = noise_.Process() * noiseLevel_;
+            float nRight = noise_.Process() * noiseLevel_ * 0.97f;
 
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);
 
-            float ls = SoftClip(lIn * amp_ + n);
-            float rs = SoftClip(rIn * amp_ + n);
+            float ls = SoftClip(lIn * amp_ + nLeft);
+            float rs = SoftClip(rIn * amp_ + nRight);
 
-            float lf = LinearCrossFade(lIn + n, ls, drive_);
-            float rf = LinearCrossFade(rIn + n, rs, drive_);
+            float lf = LinearCrossFade(lIn + nLeft, ls, drive_);
+            float rf = LinearCrossFade(rIn + nRight, rs, drive_);
 
             float lo, ro;
             if (FilterMode::CF == mode_)

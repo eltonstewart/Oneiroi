@@ -8,10 +8,30 @@ This guide covers how to load your custom `TechnoMachine` patch onto the Befaco 
 
 The module has a separate "Bootloader" that lives in a protected part of memory. Even if your code crashes the module immediately upon startup (making it unresponsive), you can always enter Bootloader Mode to wipe it and upload the factory firmware.
 
-## 1. How to Load Your Patch
+## 1. Quick Installation Guide
+
+### Prerequisites
+- **USB Cable**: Data cable (not charging-only) connected to bottom of Oneiroi
+- **Compiled Patch**: Run `make` to generate `../OwlProgram/Build/patch.bin`
+
+### Install Commands
+```bash
+# Test in RAM (temporary)
+make load
+
+# Save permanently to flash
+make store
+```
+
+### Verification
+- Module should respond immediately after `make load`
+- Settings persist after power cycle with `make store`
+- Check terminal for progress bar during upload
+
+## 2. Detailed Loading Methods
 
 ### Option A: The "Plain Human" Way (Web Browser)
-*Best for getting started and simple testing.*
+*Best for getting started and simple testing. Requires sysex file.*
 
 1.  **Locate the File**: After compiling, your file is located at `../OwlProgram/Build/patch.syx`.
 2.  **Connect**: Plug your Oneiroi into your computer via USB.
@@ -23,6 +43,8 @@ The module has a separate "Bootloader" that lives in a protected part of memory.
     *   Select your `patch.syx`.
     *   Click **"Run"** to test it in RAM (temporary).
     *   Click **"Store"** (Slot 1) to save it permanently.
+
+**Note**: Sysex generation requires the FirmwareSender tool. If `make sysex` fails, use Option B instead.
 
 ### Option B: The "Nerdy" Way (Command Line)
 *Best for rapid development iterations.*

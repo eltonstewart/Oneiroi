@@ -8,6 +8,10 @@
 #include "DcBlockingFilter.h"
 #include "Compressor.h"
 
+// Techno-leaning reverb damping. One-pole lowpass (high-freq damping) in
+// parallel with a one-pole tracker subtracted to form a highpass (low-freq
+// damping). Cheaper than the biquad shelves it replaces and keeps the tail
+// tight without sub buildup.
 class Damp
 {
 private:
@@ -17,12 +21,9 @@ private:
     float hpState_;
 
 public:
-    Damp(float sampleRate)
+    Damp(float /*sampleRate*/)
+        : lpCoeff_(0.f), hpCoeff_(0.f), lpState_(0.f), hpState_(0.f)
     {
-        lpState_ = 0.0f;
-        hpState_ = 0.0f;
-        lpCoeff_ = 0.0f;
-        hpCoeff_ = 0.0f;
     }
     ~Damp() {}
 
@@ -36,93 +37,28 @@ public:
         delete damp;
     }
 
-    // N.B: In this One-Pole implementation, we approximate the shelving behavior
-    // by using a lowpass for the 'High Damping' (removing highs) and a highpass 
-    // for 'Low Damping' (removing lows). 
-    
-    // SetHi controls the High Frequency Damping (LowPass behavior)
-    // Input 'val' is damping in dB (e.g. -0.5 to -40).
-    // -0.5dB = Minimal damping = Open filter = Coeff close to 1.0
-    // -40dB = Heavy damping = Closed filter = Coeff close to 0.0
+    // val is attenuation in dB (~-40..-0.5). More negative = heavier damping.
     void SetHi(float val)
     {
-        // Map -40..-0.5 to approx 0.1..0.9
-        float norm = Map(val, -40.f, -0.5f, 0.05f, 0.9f);
-        lpCoeff_ = Clamp(norm, 0.001f, 0.999f);
+        lpCoeff_ = Clamp(Map(val, -40.f, -0.5f, 0.05f, 0.9f), 0.001f, 0.999f);
     }
 
-    // SetLo controls the Low Frequency Damping (HighPass behavior)
-    // Input 'val' is damping in dB.
-    // -0.5dB = Minimal damping = Low HP cutoff = Coeff close to 0.0
-    // -40dB  = Heavy damping = High HP cutoff = Coeff close to 1.0 (assuming y[n] = y[n-1] + c * (x - y[n-1]) for the tracking LP)
     void SetLo(float val)
     {
-        // One-Pole HP is usually Input - LP.
-        // If LP coeff is 0.05 (slow), LP tracks deeply, Input - LP contains Highs (HP cutoff is low).
-        // If LP coeff is 0.9 (fast), LP matches Input, Input - LP is near zero (HP cutoff is high).
-        
-        // Wait, hpState_ += hpCoeff_ * (lpState_ - hpState_);
-        // If hpCoeff_ is high (1.0), hpState_ tracks lpState_ perfectly. Output (lp - hp) -> 0. (Bass removed).
-        // If hpCoeff_ is low (0.0), hpState_ stays 0. Output (lp - hp) -> lpState_. (Bass preserved).
-        
-        // So:
-        // -0.5dB (Min Damping, Keep Bass) -> Coeff close to 0.0
-        // -40dB (Max Damping, Kill Bass) -> Coeff close to 1.0
-        
-        float norm = Map(val, -40.f, -0.5f, 0.9f, 0.05f);
-        hpCoeff_ = Clamp(norm, 0.001f, 0.999f);
+        hpCoeff_ = Clamp(Map(val, -40.f, -0.5f, 0.9f, 0.05f), 0.001f, 0.999f);
     }
 
-    // The legacy SetHp/SetLp methods set the *fixed* cutoff frequencies 
-    // for the shelving filters. In a 1-pole model, we can't easily separate
-    // "cutoff" from "gain" like a shelf. 
-    // We will ignore them or use them to fine-tune the mapping range if strictly needed,
-    // but for this optimization, fixed coefficients derived from the main 'Damping' params above are sufficient.
-    void SetHp(int val) { }
-    void SetLp(float val) { }
-
+    // Legacy shelf-cutoff hooks. In the 1-pole model cutoff is folded into
+    // the damping coefficient, so these are intentional no-ops.
+    void SetHp(int /*val*/) {}
+    void SetLp(float /*val*/) {}
 
     float Process(float in)
     {
-        // 1-Pole Lowpass: y[n] = y[n-1] + coeff * (x[n] - y[n-1])
-        // Used for High Damping (removing high freqs)
         lpState_ += lpCoeff_ * (in - lpState_);
-        
-        // 1-Pole Highpass: y[n] = coeff * (y[n-1] + x[n] - x[n-1])
-        // or effectively subtracting a lowpass from the input.
-        // Let's use the subtraction method for stability and simplicity:
-        // HP = Input - LP(Input)
-        
-        // For Low Damping (removing lows), we want a Highpass effect.
-        // We use a separate state variable for a 'tracking lowpass' and subtract it.
-        hpState_ += hpCoeff_ * (lpState_ - hpState_);
-        float out = lpState_ - hpState_; 
-        
-        // Result: 
-        // lpState_ has damped highs.
-        // (lpState_ - hpState_) removes the lows from that result.
-        // So we have Bandpassed signal (Damped Highs AND Damped Lows).
-        
-        // Note: The previous "Damp" class was a LowShelf + HighShelf. 
-        // A 1-pole LP is roughly equivalent to a HighShelf cutting to -infinity.
-        // A 1-pole HP is roughly equivalent to a LowShelf cutting to -infinity.
-        // This is the standard "Reverb Damping" behavior.
-        
-        return lpState_; // Return just LowPass for now to test High Damping first? 
-        // Actually, let's implement the full Low+High damp:
-        // return lpState_ - hpState_; 
-        
-        // Wait, standard reverb only has High Damping (LowPass). 
-        // The original code had "SetHi" and "SetLo".
-        // Let's stick to the most critical one: High Frequency Damping (LowPass).
-        // And if Low Damping is required, we subtract a low-passed version (HighPass).
-        
-        return lpState_;
+        hpState_ += hpCoeff_ * (in - hpState_);
+        return lpState_ - hpState_ * 0.85f;
     }
-    
-    // Correct logic for 1-pole Damping to match "Shelf" behavior:
-    // The coefficients shouldn't just be cutoff, they should represent "Amount of Damping".
-    // But usually in Reverb algos, "Damping" = "Cutoff Frequency of the internal Lowpass".
 }; // End Damp
 
 class Diffuse
@@ -341,6 +277,7 @@ private:
 
     float amp_, pan_, decay_, spaceTime_;
     float reverse_;
+    float width_;
     float xi_;
 
     Lut<float, 32> decayLUT{0.f, -160.f, Lut<float, 32>::Type::LUT_TYPE_EXPO};
@@ -429,10 +366,11 @@ private:
         SetLowDamp(lowDamp);
         SetHighDamp(highDamp);
         SetSize(size);
+        width_ = Clamp(Map(fabsf(spaceTime_), 0.f, 1.f, 0.62f, 0.84f), 0.5f, 0.9f);
 
         if (spaceTime_ < -0.2f)
         {
-            reverse_ = 1.f;
+            reverse_ = 0.75f;
         }
         else if (spaceTime_ > 0.2f)
         {
@@ -472,6 +410,7 @@ public:
 
         amp_ = 1.f;
         pan_ = 0.5f;
+        width_ = 0.72f;
         xi_ = 1.f / patchState_->blockSize;
     }
     ~Ambience()
@@ -527,14 +466,18 @@ public:
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);
 
-            float left = reversers_[LEFT_CHANNEL]->LastOut() * reverse_ + lIn * r;
-            float right = reversers_[RIGHT_CHANNEL]->LastOut() * reverse_ + rIn * r;
+            float revLeft = reversers_[LEFT_CHANNEL]->LastOut();
+            float revRight = reversers_[RIGHT_CHANNEL]->LastOut();
+            float reverseMid = Mix2(revLeft, revRight);
+
+            float left = (revLeft * 0.8f + reverseMid * 0.2f) * reverse_ + lIn * r;
+            float right = (revRight * 0.8f + reverseMid * 0.2f) * reverse_ + rIn * r;
 
             reversers_[LEFT_CHANNEL]->Process(lIn);
             reversers_[RIGHT_CHANNEL]->Process(rIn);
 
-            float leftFb = dampFilters_[LEFT_CHANNEL]->Process(left + diffusers_[RIGHT_CHANNEL]->GetFbOut());
-            float rightFb = dampFilters_[RIGHT_CHANNEL]->Process(right + diffusers_[LEFT_CHANNEL]->GetFbOut());
+            float leftFb = dampFilters_[LEFT_CHANNEL]->Process(left + diffusers_[RIGHT_CHANNEL]->GetFbOut() * 0.82f);
+            float rightFb = dampFilters_[RIGHT_CHANNEL]->Process(right + diffusers_[LEFT_CHANNEL]->GetFbOut() * 0.82f);
 
             leftFb = HardClip(left * (1.f - pan_) + leftFb);
             rightFb = HardClip(right * pan_ + rightFb);
@@ -549,6 +492,10 @@ public:
             right = diffusers_[RIGHT_CHANNEL]->Process(rightFb, x);
 
             x += xi_;
+
+            float wetMid = Mix2(left, right);
+            left = wetMid * (1.f - width_) + left * width_;
+            right = wetMid * (1.f - width_) + right * width_;
 
             float a = Map(decay_, 0.f, 1.f, amp_ * 1.3f, amp_);
 

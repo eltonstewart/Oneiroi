@@ -69,7 +69,7 @@ constexpr int kRandomSlewSamples = 128;
 constexpr float kA4Freq = 440.f;
 constexpr int kA4Note = 69;
 constexpr float kSemi4Oct = 12;
-constexpr float kOscFreqMin = 16.35f; // C0
+constexpr float kOscFreqMin = 5.0f; // Extended for deep drones
 constexpr float kOscFreqMax = 8219.f; // C9
 
 constexpr size_t kLooperInterpolationBlocks = 4; // This number * block size = samples
@@ -115,7 +115,7 @@ constexpr float kClockTempoSamplesMin = 48; // Minimum number of tempo's samples
 constexpr float kOScSineGain = 0.3f;
 static const float kOscSineFadeInc = 1.f / 2400;
 constexpr float kOScSuperSawGain = 0.4f;
-constexpr float kOScWaveTablePreGain = 6.f;
+constexpr float kOScWaveTablePreGain = 3.f;
 constexpr float kOScWaveTableGain = 0.3f;
 constexpr float kSourcesMakeupGain = 0.2f;
 
@@ -139,7 +139,7 @@ constexpr float kResoGainMin = 0.5f;
 constexpr float kResoGainMax = 1.2f;
 constexpr float kResoMakeupGain = 1.2f;
 constexpr int32_t kResoBufferSize = 2400;
-constexpr float kResoInfiniteFeedbackThreshold = 0.99f;
+constexpr float kResoInfiniteFeedbackThreshold = 0.97f; // Increased for more aggressive drones
 constexpr float kResoInfiniteFeedbackLevel = 1.05f;
 constexpr float kWavefolderMakeupGain = 0.5f;
 

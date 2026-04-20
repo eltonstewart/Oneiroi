@@ -49,7 +49,7 @@ public:
 
     void SetDetune(float value, bool minor = false)
     {
-        detune_ = value * 0.4f;
+        detune_ = value * 0.6f; // Increased from 0.4f for wider detuning
 
         if (minor)
         {
@@ -72,7 +72,7 @@ public:
             detunes_[6] = 1 + detune_ * 0.10745242f;
         }
 
-        value = Clamp(value * 0.5f, 0.005f, 0.5f);
+        value = Clamp(value * 0.5f, 0.005f, 0.7f); // Increased max from 0.5f to 0.7f for more detune
 
         float y = -0.73764f * fast_powf(value, 2.f) + 1.2841f * value + 0.044372f;
         volumes_[0] = y;
