@@ -20,6 +20,13 @@ enum EchoTap
 class Echo
 {
 private:
+    static constexpr float kEchoFeedbackToneCoeff = 0.11f;
+    static constexpr float kEchoFeedbackLowCoeff = 0.018f;
+    static constexpr float kEchoFeedbackLowTrim = 0.18f;
+    static constexpr float kEchoTapBlendLeft = 0.42f;
+    static constexpr float kEchoTapBlendRight = 0.58f;
+    static constexpr float kEchoFeedbackSkew = 0.015f;
+
     PatchCtrls* patchCtrls_;
     PatchCvs* patchCvs_;
     PatchState* patchState_;
@@ -42,6 +49,15 @@ private:
     bool infinite_;
     float tapBlendLeft_;
     float tapBlendRight_;
+    float feedbackTone_[2];
+    float feedbackLow_[2];
+
+    inline float ShapeFeedback(float in, int channel)
+    {
+        feedbackTone_[channel] += kEchoFeedbackToneCoeff * (in - feedbackTone_[channel]);
+        feedbackLow_[channel] += kEchoFeedbackLowCoeff * (feedbackTone_[channel] - feedbackLow_[channel]);
+        return feedbackTone_[channel] - feedbackLow_[channel] * kEchoFeedbackLowTrim;
+    }
 
     void SetTapTime(int idx, float time)
     {
@@ -169,8 +185,12 @@ public:
 
         externalClock_ = false;
         infinite_ = false;
-        tapBlendLeft_ = 0.42f;
-        tapBlendRight_ = 0.58f;
+        tapBlendLeft_ = kEchoTapBlendLeft;
+        tapBlendRight_ = kEchoTapBlendRight;
+        feedbackTone_[LEFT_CHANNEL] = 0.f;
+        feedbackTone_[RIGHT_CHANNEL] = 0.f;
+        feedbackLow_[LEFT_CHANNEL] = 0.f;
+        feedbackLow_[RIGHT_CHANNEL] = 0.f;
 
         filter_ = DjFilter::create(patchState_->sampleRate);
 
@@ -259,14 +279,16 @@ private:
             outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x);
             x += xi;
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
+            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * (1.f - kEchoFeedbackSkew) + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * (1.f + kEchoFeedbackSkew));
+            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * (1.f + kEchoFeedbackSkew) + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * (1.f - kEchoFeedbackSkew));
 
             if (infinite_)
             {
                 leftFb *= 1.08f - ef_[LEFT_CHANNEL]->process(leftFb);
                 rightFb *= 1.08f - ef_[RIGHT_CHANNEL]->process(rightFb);
             }
+            leftFb = ShapeFeedback(leftFb, LEFT_CHANNEL);
+            rightFb = ShapeFeedback(rightFb, RIGHT_CHANNEL);
 
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);
@@ -311,14 +333,16 @@ private:
             outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_A]);
             outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_B]);
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
+            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * (1.f - kEchoFeedbackSkew) + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * (1.f + kEchoFeedbackSkew));
+            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * (1.f + kEchoFeedbackSkew) + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * (1.f - kEchoFeedbackSkew));
 
             if (infinite_)
             {
                 leftFb *= 1.08f - ef_[LEFT_CHANNEL]->process(leftFb);
                 rightFb *= 1.08f - ef_[RIGHT_CHANNEL]->process(rightFb);
             }
+            leftFb = ShapeFeedback(leftFb, LEFT_CHANNEL);
+            rightFb = ShapeFeedback(rightFb, RIGHT_CHANNEL);
 
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);

@@ -9,6 +9,7 @@
 #include "Filter.h"
 #include "Resonator.h"
 #include "StereoWavefolder.h"
+#include "TonalShadow.h"
 #include "Echo.h"
 #include "Looper.h"
 #include "Schmitt.h"
@@ -35,6 +36,7 @@ private:
     Echo* echo_;
     Ambience* ambience_;
     Looper* looper_;
+    TonalShadow* tonalShadow_;
     Limiter* limiter_;
 
     Modulation* modulation_;
@@ -69,6 +71,7 @@ public:
         filter_ = Filter::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectResonator] = Resonator::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectWavefolder] = StereoWavefolder::create(patchCtrls_, patchCvs_, patchState_);
+        tonalShadow_ = TonalShadow::create(patchState_->sampleRate);
         echo_ = Echo::create(patchCtrls_, patchCvs_, patchState_);
         ambience_ = Ambience::create(patchCtrls_, patchCvs_, patchState_);
 
@@ -103,6 +106,7 @@ public:
         Filter::destroy(filter_);
         StereoEffect::destroy(effects_[kEffectResonator]);
         StereoEffect::destroy(effects_[kEffectWavefolder]);
+        TonalShadow::destroy(tonalShadow_);
         Echo::destroy(echo_);
         Ambience::destroy(ambience_);
         Modulation::destroy(modulation_);
@@ -229,6 +233,8 @@ public:
         if (effectIndex < 0) effectIndex = 0;
         if (effectIndex >= kNumEffects) effectIndex = kNumEffects - 1;
         effects_[effectIndex]->process(buffer, buffer);
+        float shadowAmount = effectIndex == kEffectWavefolder ? patchCtrls_->resonatorVol * 0.18f : 0.f;
+        tonalShadow_->Process(buffer, shadowAmount);
 
         if (FilterPosition::POSITION_2 == filterPosition_)
         {
@@ -263,4 +269,3 @@ public:
         resample_->copyFrom(buffer);
     }
 };
-
