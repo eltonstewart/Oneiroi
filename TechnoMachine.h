@@ -9,6 +9,8 @@
 #include "Filter.h"
 #include "Resonator.h"
 #include "StereoWavefolder.h"
+#include "StereoWidener.h"
+#include "PhasePhaser.h"
 #include "TonalShadow.h"
 #include "Echo.h"
 #include "Looper.h"
@@ -71,6 +73,8 @@ public:
         filter_ = Filter::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectResonator] = Resonator::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectWavefolder] = StereoWavefolder::create(patchCtrls_, patchCvs_, patchState_);
+        effects_[kEffectStereoWidener] = StereoWidener::create(patchCtrls_, patchCvs_, patchState_);
+        effects_[kEffectPhaser] = PhasePhaser::create(patchCtrls_, patchCvs_, patchState_);
         tonalShadow_ = TonalShadow::create(patchState_->sampleRate);
         echo_ = Echo::create(patchCtrls_, patchCvs_, patchState_);
         ambience_ = Ambience::create(patchCtrls_, patchCvs_, patchState_);
@@ -106,6 +110,8 @@ public:
         Filter::destroy(filter_);
         StereoEffect::destroy(effects_[kEffectResonator]);
         StereoEffect::destroy(effects_[kEffectWavefolder]);
+        StereoEffect::destroy(effects_[kEffectStereoWidener]);
+        StereoEffect::destroy(effects_[kEffectPhaser]);
         TonalShadow::destroy(tonalShadow_);
         Echo::destroy(echo_);
         Ambience::destroy(ambience_);
@@ -233,7 +239,19 @@ public:
         if (effectIndex < 0) effectIndex = 0;
         if (effectIndex >= kNumEffects) effectIndex = kNumEffects - 1;
         effects_[effectIndex]->process(buffer, buffer);
-        float shadowAmount = effectIndex == kEffectWavefolder ? patchCtrls_->resonatorVol * 0.18f : 0.f;
+        float shadowAmount = 0.f;
+        if (effectIndex == kEffectWavefolder)
+        {
+            shadowAmount = patchCtrls_->resonatorVol * 0.18f;
+        }
+        else if (effectIndex == kEffectStereoWidener)
+        {
+            shadowAmount = patchCtrls_->resonatorVol * 0.12f;
+        }
+        else if (effectIndex == kEffectPhaser)
+        {
+            shadowAmount = patchCtrls_->resonatorFeedback * 0.08f;
+        }
         tonalShadow_->Process(buffer, shadowAmount);
 
         if (FilterPosition::POSITION_2 == filterPosition_)

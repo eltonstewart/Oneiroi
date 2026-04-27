@@ -7,6 +7,7 @@
 #include "ParameterInterpolator.h"
 #include "DjFilter.h"
 #include "Compressor.h"
+#include "AllPassFilter.h"
 #include <stdint.h>
 
 enum EchoTap
@@ -52,11 +53,28 @@ private:
     float feedbackTone_[2];
     float feedbackLow_[2];
 
+    AllPassFilter* vibratoAp_[2];
+    float vibratoPhase_;
+    static constexpr float kEchoVibratoMinFreq = 600.f;
+    static constexpr float kEchoVibratoMaxFreq = 3000.f;
+    static constexpr float kEchoVibratoRate = 0.35f;
+
     inline float ShapeFeedback(float in, int channel)
     {
         feedbackTone_[channel] += kEchoFeedbackToneCoeff * (in - feedbackTone_[channel]);
         feedbackLow_[channel] += kEchoFeedbackLowCoeff * (feedbackTone_[channel] - feedbackLow_[channel]);
         return feedbackTone_[channel] - feedbackLow_[channel] * kEchoFeedbackLowTrim;
+    }
+
+    inline float ProcessVibrato(float in, int channel)
+    {
+        vibratoPhase_ += k2Pi * kEchoVibratoRate / patchState_->sampleRate;
+        if (vibratoPhase_ > k2Pi) vibratoPhase_ -= k2Pi;
+
+        float lfo = sinf(vibratoPhase_ + channel * kPi);
+        float freq = kEchoVibratoMinFreq + (kEchoVibratoMaxFreq - kEchoVibratoMinFreq) * (0.5f + 0.5f * lfo);
+
+        return vibratoAp_[channel]->Process(in, freq);
     }
 
     void SetTapTime(int idx, float time)
@@ -191,6 +209,12 @@ public:
         feedbackTone_[RIGHT_CHANNEL] = 0.f;
         feedbackLow_[LEFT_CHANNEL] = 0.f;
         feedbackLow_[RIGHT_CHANNEL] = 0.f;
+        vibratoPhase_ = 0.f;
+
+        for (size_t i = 0; i < 2; i++)
+        {
+            vibratoAp_[i] = AllPassFilter::create(patchState_->sampleRate, true);
+        }
 
         filter_ = DjFilter::create(patchState_->sampleRate);
 
@@ -213,6 +237,7 @@ public:
         DjFilter::destroy(filter_);
         for (size_t i = 0; i < 2; i++)
         {
+            AllPassFilter::destroy(vibratoAp_[i]);
             Compressor::destroy(comp_[i]);
             EnvFollower::destroy(ef_[i]);
         }
@@ -289,6 +314,8 @@ private:
             }
             leftFb = ShapeFeedback(leftFb, LEFT_CHANNEL);
             rightFb = ShapeFeedback(rightFb, RIGHT_CHANNEL);
+            leftFb = ProcessVibrato(leftFb, LEFT_CHANNEL);
+            rightFb = ProcessVibrato(rightFb, RIGHT_CHANNEL);
 
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);
@@ -343,6 +370,8 @@ private:
             }
             leftFb = ShapeFeedback(leftFb, LEFT_CHANNEL);
             rightFb = ShapeFeedback(rightFb, RIGHT_CHANNEL);
+            leftFb = ProcessVibrato(leftFb, LEFT_CHANNEL);
+            rightFb = ProcessVibrato(rightFb, RIGHT_CHANNEL);
 
             float lIn = Clamp(leftIn[i], -3.f, 3.f);
             float rIn = Clamp(rightIn[i], -3.f, 3.f);

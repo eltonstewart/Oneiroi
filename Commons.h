@@ -145,7 +145,9 @@ constexpr float kWavefolderMakeupGain = 0.5f;
 
 constexpr int kEffectResonator = 0;
 constexpr int kEffectWavefolder = 1;
-constexpr int kNumEffects = 2;
+constexpr int kEffectStereoWidener = 2;
+constexpr int kEffectPhaser = 3;
+constexpr int kNumEffects = 4;
 
 constexpr int32_t kEchoFadeSamples = 2400; // 50 ms @ audio rate
 constexpr int32_t kEchoMinLengthSamples = 480; // 10 ms @ audio rate
