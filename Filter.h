@@ -77,14 +77,17 @@ public:
 
     float Process(float in)
     {
+        // Read delayed sample with linear interpolation for fractional delay
         size_t idx = (size_t)d_;
         float y0 = readAt(idx);
         float y1 = readAt(idx + 1);
         float frac = d_ - idx;
+        float delayedSample = Interpolator::linear(y0, y1, frac);
 
-        float out = Interpolator::linear(y0, y1, frac) + (-c_ * in);
-
-        line_.setElement(w_, in + (c_ * out));
+        // Standard allpass: y[n] = -c * x[n] + delayed_sample
+        //                   w[n] = x[n] + c * y[n]
+        float out = delayedSample - c_ * in;
+        line_.setElement(w_, in + c_ * out);
 
         w_ = (w_ + 1) % s_;
 
@@ -93,7 +96,10 @@ public:
 
     float ProcessFixed(float in)
     {
-        float delayedSample = line_.getElement(w_);
+        // Read from 1 sample behind write position for proper allpass delay
+        int readPos = w_ - 1;
+        if (readPos < 0) readPos += s_;
+        float delayedSample = line_.getElement(readPos);
         float out = delayedSample - c_ * in;
         line_.setElement(w_, in + c_ * out);
         w_ = (w_ + 1) % s_;
@@ -408,26 +414,29 @@ public:
             return;
         }
 
+        int coeffUpdateCounter = 0;
         for (size_t i = 0; i < size; i++)
         {
-            SetReso(resoParam.Next());
-            
+            float currentReso = resoParam.Next();
             float currentControl = cutoffParam.Next();
-            float hz;
-            if (logInterpolation) {
-                // Inline MapLog logic: fast_expf(Map(val, 0, 1, bMin, bMax))
-                // Map(val, 0, 1, bMin, bMax) simplifies to: bMin + val * (bMax - bMin)
-                float exponent = bMin + currentControl * (bMax - bMin);
-                hz = fast_expf(exponent);
-                hz = Clamp(hz, 10.f, 22000.f);
-            } else {
-                // CF mode - linear Hz mapping (interpolating control 0-1 linearly results in linear Hz)
-                // We could interpolate control and map, or interpolate Hz.
-                // Since mapping is linear: Map(val, 0, 1, 100, 15000)
-                hz = Map(currentControl, 0.f, 1.f, 100.f, 15000.f);
-                hz = Clamp(hz, 100.f, 15000.f);
+            
+            // Update filter coefficients every 8 samples to save CPU
+            if (++coeffUpdateCounter >= 8)
+            {
+                coeffUpdateCounter = 0;
+                SetReso(currentReso);
+                
+                float hz;
+                if (logInterpolation) {
+                    float exponent = bMin + currentControl * (bMax - bMin);
+                    hz = fast_expf(exponent);
+                    hz = Clamp(hz, 10.f, 22000.f);
+                } else {
+                    hz = Map(currentControl, 0.f, 1.f, 100.f, 15000.f);
+                    hz = Clamp(hz, 100.f, 15000.f);
+                }
+                SetFreqHz(hz);
             }
-            SetFreqHz(hz);
 
             float nLeft = noise_.Process() * noiseLevel_;
             float nRight = noise_.Process() * noiseLevel_ * 0.97f;
@@ -444,8 +453,8 @@ public:
             float lo, ro;
             if (FilterMode::CF == mode_)
             {
-                lo = HardClip(combs_[LEFT_CHANNEL]->Process(lf) * filterGain_);
-                ro = HardClip(combs_[RIGHT_CHANNEL]->Process(rf) * filterGain_);
+                lo = SoftClip(combs_[LEFT_CHANNEL]->Process(lf) * filterGain_);
+                ro = SoftClip(combs_[RIGHT_CHANNEL]->Process(rf) * filterGain_);
                 lo = dc_[LEFT_CHANNEL]->process(lo);
                 ro = dc_[RIGHT_CHANNEL]->process(ro);
             }

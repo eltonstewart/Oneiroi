@@ -238,8 +238,8 @@ private:
                 float left, right;
                 filter_->Process(input.getSamples(LEFT_CHANNEL)[i], input.getSamples(RIGHT_CHANNEL)[i], left, right);
 
-                left = HardClip(sosOut_->getSamples(LEFT_CHANNEL)[i] * patchCtrls_->looperSos + left);
-                right = HardClip(sosOut_->getSamples(RIGHT_CHANNEL)[i] * patchCtrls_->looperSos + right);
+                left = SoftClip(sosOut_->getSamples(LEFT_CHANNEL)[i] * patchCtrls_->looperSos + left);
+                right = SoftClip(sosOut_->getSamples(RIGHT_CHANNEL)[i] * patchCtrls_->looperSos + right);
 
                 left *= 1.f - ef_[LEFT_CHANNEL]->process(left);
                 right *= 1.f - ef_[RIGHT_CHANNEL]->process(right);

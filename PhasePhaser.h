@@ -66,6 +66,7 @@ public:
         ParameterInterpolator freqParam(&oldFreq_, baseFreq, size, ParameterInterpolator::BY_SIZE);
 
         float phaseInc = k2Pi * rate / patchState_->sampleRate;
+        int coeffUpdateCounter = 0;
 
         for (size_t i = 0; i < size; i++)
         {
@@ -79,6 +80,18 @@ public:
             float lfo = sinf(phase_);
             float modFreq = f + f * lfo * 0.5f;
 
+            // Update allpass coefficients every 8 samples to save CPU
+            if (++coeffUpdateCounter >= 8)
+            {
+                coeffUpdateCounter = 0;
+                for (int s = 0; s < kPhaserStages; s++)
+                {
+                    float stageFreq = modFreq * (1.0f + s * 0.08f);
+                    apLeft_[s]->SetFreq(stageFreq);
+                    apRight_[s]->SetFreq(stageFreq);
+                }
+            }
+
             float le = left[i];
             float ri = right[i];
 
@@ -87,8 +100,8 @@ public:
 
             for (int s = 0; s < kPhaserStages; s++)
             {
-                apL = apLeft_[s]->Process(apL, modFreq * (1.0f + s * 0.08f));
-                apR = apRight_[s]->Process(apR, modFreq * (1.0f + s * 0.08f));
+                apL = apLeft_[s]->ProcessStatic(apL);
+                apR = apRight_[s]->ProcessStatic(apR);
             }
 
             float fbL = (le + apL * kPhaserFeedbackAmount) * d;

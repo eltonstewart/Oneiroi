@@ -55,8 +55,8 @@ public:
 
     float Process(float in)
     {
-        lpState_ += lpCoeff_ * (in - lpState_);
-        hpState_ += hpCoeff_ * (in - hpState_);
+        lpState_ += lpCoeff_ * (in - lpState_) + 1e-18f;
+        hpState_ += hpCoeff_ * (in - hpState_) + 1e-18f;
         return lpState_ - hpState_ * 0.85f;
     }
 }; // End Damp
@@ -479,8 +479,8 @@ public:
             float leftFb = dampFilters_[LEFT_CHANNEL]->Process(left + diffusers_[RIGHT_CHANNEL]->GetFbOut() * 0.82f);
             float rightFb = dampFilters_[RIGHT_CHANNEL]->Process(right + diffusers_[LEFT_CHANNEL]->GetFbOut() * 0.82f);
 
-            leftFb = HardClip(left * (1.f - pan_) + leftFb);
-            rightFb = HardClip(right * pan_ + rightFb);
+            leftFb = SoftClip(left * (1.f - pan_) + leftFb);
+            rightFb = SoftClip(right * pan_ + rightFb);
 
             leftFb *= 1.f - ef_[LEFT_CHANNEL]->process(leftFb);
             rightFb *= 1.f - ef_[RIGHT_CHANNEL]->process(rightFb);

@@ -55,14 +55,15 @@ private:
 
     AllPassFilter* vibratoAp_[2];
     float vibratoPhase_;
+    int vibratoCoeffCounter_;
     static constexpr float kEchoVibratoMinFreq = 600.f;
     static constexpr float kEchoVibratoMaxFreq = 3000.f;
     static constexpr float kEchoVibratoRate = 0.35f;
 
     inline float ShapeFeedback(float in, int channel)
     {
-        feedbackTone_[channel] += kEchoFeedbackToneCoeff * (in - feedbackTone_[channel]);
-        feedbackLow_[channel] += kEchoFeedbackLowCoeff * (feedbackTone_[channel] - feedbackLow_[channel]);
+        feedbackTone_[channel] += kEchoFeedbackToneCoeff * (in - feedbackTone_[channel]) + 1e-18f;
+        feedbackLow_[channel] += kEchoFeedbackLowCoeff * (feedbackTone_[channel] - feedbackLow_[channel]) + 1e-18f;
         return feedbackTone_[channel] - feedbackLow_[channel] * kEchoFeedbackLowTrim;
     }
 
@@ -74,7 +75,14 @@ private:
         float lfo = sinf(vibratoPhase_ + channel * kPi);
         float freq = kEchoVibratoMinFreq + (kEchoVibratoMaxFreq - kEchoVibratoMinFreq) * (0.5f + 0.5f * lfo);
 
-        return vibratoAp_[channel]->Process(in, freq);
+        // Update allpass coefficients every 8 samples to save CPU
+        if (++vibratoCoeffCounter_ >= 8)
+        {
+            vibratoCoeffCounter_ = 0;
+            vibratoAp_[channel]->SetFreq(freq);
+        }
+
+        return vibratoAp_[channel]->ProcessStatic(in);
     }
 
     void SetTapTime(int idx, float time)
@@ -210,6 +218,7 @@ public:
         feedbackLow_[LEFT_CHANNEL] = 0.f;
         feedbackLow_[RIGHT_CHANNEL] = 0.f;
         vibratoPhase_ = 0.f;
+        vibratoCoeffCounter_ = 0;
 
         for (size_t i = 0; i < 2; i++)
         {
@@ -304,8 +313,8 @@ private:
             outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x);
             x += xi;
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * (1.f - kEchoFeedbackSkew) + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * (1.f + kEchoFeedbackSkew));
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * (1.f + kEchoFeedbackSkew) + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * (1.f - kEchoFeedbackSkew));
+            float leftFb = SoftClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * (1.f - kEchoFeedbackSkew) + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * (1.f + kEchoFeedbackSkew));
+            float rightFb = SoftClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * (1.f + kEchoFeedbackSkew) + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * (1.f - kEchoFeedbackSkew));
 
             if (infinite_)
             {
@@ -360,8 +369,8 @@ private:
             outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_A]);
             outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_B]);
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * (1.f - kEchoFeedbackSkew) + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * (1.f + kEchoFeedbackSkew));
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * (1.f + kEchoFeedbackSkew) + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * (1.f - kEchoFeedbackSkew));
+            float leftFb = SoftClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * (1.f - kEchoFeedbackSkew) + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * (1.f + kEchoFeedbackSkew));
+            float rightFb = SoftClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * (1.f + kEchoFeedbackSkew) + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * (1.f - kEchoFeedbackSkew));
 
             if (infinite_)
             {

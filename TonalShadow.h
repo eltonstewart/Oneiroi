@@ -28,8 +28,8 @@ private:
 
     inline float ShapeShadow(float in, int channel)
     {
-        lpState_[channel] += kShadowLowpassCoeff * (in - lpState_[channel]);
-        lowState_[channel] += kShadowLowCoeff * (lpState_[channel] - lowState_[channel]);
+        lpState_[channel] += kShadowLowpassCoeff * (in - lpState_[channel]) + 1e-18f;
+        lowState_[channel] += kShadowLowCoeff * (lpState_[channel] - lowState_[channel]) + 1e-18f;
         return lpState_[channel] - lowState_[channel] * kShadowLowTrim;
     }
 

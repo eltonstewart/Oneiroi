@@ -72,6 +72,20 @@ public:
         return Interpolator::linear(y0, y1, frac);
     }
 
+    inline float readCubic(float index)
+    {
+        index = Clamp(index, 1.f, static_cast<float>(size_ - 3));
+        size_t idx = (size_t)index;
+        float frac = index - idx;
+
+        float y0 = readAt(idx - 1);
+        float y1 = readAt(idx);
+        float y2 = readAt(idx + 1);
+        float y3 = readAt(idx + 2);
+
+        return Interpolator::cubic(y0, y1, y2, y3, frac);
+    }
+
     inline float read(float index1, float index2, float x)
     {
         float v = read(index1);

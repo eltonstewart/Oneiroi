@@ -54,16 +54,25 @@ public:
         ParameterInterpolator widthParam(&oldWidth_, width, size, ParameterInterpolator::BY_SIZE);
         ParameterInterpolator freqParam(&oldFreq_, freq, size, ParameterInterpolator::BY_SIZE);
 
+        int coeffUpdateCounter = 0;
         for (size_t i = 0; i < size; i++)
         {
             float w = widthParam.Next();
             float f = freqParam.Next();
 
+            // Update allpass coefficients every 16 samples to save CPU
+            if (++coeffUpdateCounter >= 16)
+            {
+                coeffUpdateCounter = 0;
+                apLeft_->SetFreq(f);
+                apRight_->SetFreq(f * kWidenerDefaultSpread);
+            }
+
             float le = left[i];
             float ri = right[i];
 
-            float apL = apLeft_->Process(le, f);
-            float apR = apRight_->Process(ri, f * kWidenerDefaultSpread);
+            float apL = apLeft_->ProcessStatic(le);
+            float apR = apRight_->ProcessStatic(ri);
 
             float wetL = LinearCrossFade(le, apL, w);
             float wetR = LinearCrossFade(ri, apR, w);
