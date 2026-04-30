@@ -105,10 +105,12 @@ public:
         {
             SetFreq(freqParam.Next());
             float v = volParam.Next();
+            float sample = 0.f;
             for (size_t j = 0; j < 7; j++)
             {
-                output[i] += oscs_[j]->generate() * volumes_[j] * v;
+                sample += oscs_[j]->generate() * volumes_[j] * v;
             }
+            output[i] = sample;
         }
 
         output.multiply(0.3f * (1.4f - detune_));

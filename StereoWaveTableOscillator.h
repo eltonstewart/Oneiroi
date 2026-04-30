@@ -17,6 +17,7 @@ private:
 
     WaveTableBuffer* wtBuffer_;
     BiquadFilter* filters_[2];
+    BiquadFilter* toneFilters_[2];
     EnvFollower* ef_[2];
 
     HysteresisQuantizer offsetQuantizer_;
@@ -50,6 +51,8 @@ public:
         {
             filters_[i] = BiquadFilter::create(patchState_->sampleRate);
             filters_[i]->setLowShelf(800, 0.8);
+            toneFilters_[i] = BiquadFilter::create(patchState_->sampleRate);
+            toneFilters_[i]->setLowPass(8000, 0.707f);
             ef_[i] = EnvFollower::create();
         }
         oldFreq_ = kOscFreqMin;
@@ -59,6 +62,7 @@ public:
         for (size_t i = 0; i < 2; i++)
         {
             BiquadFilter::destroy(filters_[i]);
+            BiquadFilter::destroy(toneFilters_[i]);
             EnvFollower::destroy(ef_[i]);
         }
     }
@@ -123,6 +127,10 @@ public:
 
             left = SoftClip(left);
             right = SoftClip(right);
+
+            // Tone smoothing: tame high-frequency hash from wavetable traversal.
+            left = toneFilters_[LEFT_CHANNEL]->process(left);
+            right = toneFilters_[RIGHT_CHANNEL]->process(right);
 
             left = filters_[LEFT_CHANNEL]->process(left);
             right = filters_[RIGHT_CHANNEL]->process(right);

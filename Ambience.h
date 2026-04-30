@@ -232,7 +232,7 @@ public:
 
         float x = b_ * rb_;
         float g = 4.f * x * (1.f - x);
-        out_ = Clamp(line_[o_--] * g, -3.f, 3.f);
+        out_ = SoftClip(line_[o_--] * g);
         b_--;
         if (b_ == 0)
         {

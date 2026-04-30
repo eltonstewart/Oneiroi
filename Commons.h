@@ -117,7 +117,7 @@ static const float kOscSineFadeInc = 1.f / 2400;
 constexpr float kOScSuperSawGain = 0.4f;
 constexpr float kOScWaveTablePreGain = 3.f;
 constexpr float kOScWaveTableGain = 0.3f;
-constexpr float kSourcesMakeupGain = 0.2f;
+constexpr float kSourcesMakeupGain = 0.4f;
 
 constexpr float kDjFilterMakeupGainMin = 1.f;
 constexpr float kDjFilterMakeupGainMax = 1.4f;
@@ -175,7 +175,7 @@ constexpr float kAmbienceRevGainMax = 1.2f;
 constexpr float kAmbienceMakeupGain = 1.2f;
 
 static const float kOutputFadeInc = 1.f / 16.f;
-constexpr float kOutputMakeupGain = 6.f;
+constexpr float kOutputMakeupGain = 3.f;
 
 constexpr float kParamCatchUpDelta = 0.005f;
 

@@ -95,7 +95,7 @@ public:
     {
         float out = lpfs_[channel]->process(outs_[channel]) * feedback_;
 
-        float mix = HardClip(dc_[channel]->process(in + out));
+        float mix = SoftClip(dc_[channel]->process(in + out));
 
         // Handle infinite feedback.
         if (infinite_)
@@ -114,8 +114,8 @@ public:
         leftOut = lpfs_[LEFT_CHANNEL]->process(outs_[LEFT_CHANNEL]) * feedback_;
         rightOut = lpfs_[RIGHT_CHANNEL]->process(outs_[RIGHT_CHANNEL]) * feedback_;
 
-        float leftMix = HardClip(dc_[LEFT_CHANNEL]->process(leftIn + leftOut));
-        float rightMix = HardClip(dc_[RIGHT_CHANNEL]->process(rightIn + rightOut));
+        float leftMix = SoftClip(dc_[LEFT_CHANNEL]->process(leftIn + leftOut));
+        float rightMix = SoftClip(dc_[RIGHT_CHANNEL]->process(rightIn + rightOut));
 
         // Handle infinite feedback.
         if (infinite_)
@@ -269,9 +269,9 @@ private:
 
     void SetDissonance(float value)
     {
-        ranges_[0] = Map(value, 0.f, 1.f, 24, 16);
-        ranges_[1] = Map(value, 0.f, 1.f, 12, 7);
-        ranges_[2] = Map(value, 0.f, 1.f, 6, 13);
+        ranges_[0] = Map(value, 0.f, 1.f, 12, 8);
+        ranges_[1] = Map(value, 0.f, 1.f, 6, 4);
+        ranges_[2] = Map(value, 0.f, 1.f, 3, 6);
 
         poles_[0]->SetDissonance(value);
         poles_[1]->SetDissonance(value * 2.f);
@@ -293,9 +293,11 @@ public:
         for (size_t i = 0; i < 2; i++)
         {
             notches_[i] = BiquadFilter::create(patchState_->sampleRate);
-            notches_[i]->setNotch(8000.f, FilterStage::SALLEN_KEY_Q);
+            // Gentler notch lower down removes metallic edge without hollowing
+            notches_[i]->setNotch(3000.f, FilterStage::BUTTERWORTH_Q);
             hs_[i] = BiquadFilter::create(patchState_->sampleRate);
-            hs_[i]->setHighShelf(8000.f, -24.f);
+            // Soft high-roll instead of brutal shelf cut
+            hs_[i]->setLowPass(6000.f, 0.707f);
             ef_[i] = EnvFollower::create();
         }
 

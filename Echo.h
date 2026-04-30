@@ -259,8 +259,8 @@ private:
             outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(tapsTimes_[TAP_RIGHT_B], newTapsTimes_[TAP_RIGHT_B], x);
             x += xi;
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
+            float leftFb = SoftClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
+            float rightFb = SoftClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
 
             if (infinite_)
             {
@@ -311,8 +311,8 @@ private:
             outs_[TAP_RIGHT_A] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_A]);
             outs_[TAP_RIGHT_B] = lines_[RIGHT_CHANNEL]->read(newTapsTimes_[TAP_RIGHT_B]);
 
-            float leftFb = HardClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
-            float rightFb = HardClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
+            float leftFb = SoftClip(outs_[TAP_LEFT_A] * levels_[TAP_LEFT_A] * 0.985f + outs_[TAP_RIGHT_A] * levels_[TAP_RIGHT_A] * 1.015f);
+            float rightFb = SoftClip(outs_[TAP_LEFT_B] * levels_[TAP_LEFT_B] * 1.015f + outs_[TAP_RIGHT_B] * levels_[TAP_RIGHT_B] * 0.985f);
 
             if (infinite_)
             {

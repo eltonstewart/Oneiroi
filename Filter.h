@@ -93,15 +93,10 @@ public:
 
     float ProcessFixed(float in)
     {
-        float out = 0;
         float delayedSample = line_.getElement(w_);
-
-        out += c_ * delayedSample;
-        out += in - c_ * out;
-
-        line_.setElement(w_, out);
+        float out = delayedSample - c_ * in;
+        line_.setElement(w_, in + c_ * out);
         w_ = (w_ + 1) % s_;
-
         return out;
     }
 };
