@@ -5,6 +5,7 @@
 #include "ChaosNoise.h"
 #include "DcBlockingFilter.h"
 #include "EnvFollower.h"
+#include "MoogLadderFilter.h"
 
 enum FilterMode
 {
@@ -183,6 +184,8 @@ private:
     PatchState* patchState_;
     StateVariableFilter* filters_[2];
     CombFilter* combs_[2];
+    MoogLadderFilter* moogFilters_[2];
+    bool useMoog_;
     ChaosNoise noise_;
     FilterMode mode_, lastMode_;
     DcBlockingFilter* dc_[2];
@@ -309,11 +312,12 @@ private:
     }
 
 public:
-    Filter(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState)
+    Filter(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState, bool useMoog = false)
     {
         patchCtrls_ = patchCtrls;
         patchCvs_ = patchCvs;
         patchState_ = patchState;
+        useMoog_ = useMoog;
 
         noise_.Init(patchState_->sampleRate);
         noise_.SetChaos(kFilterChaosNoise);
@@ -322,6 +326,7 @@ public:
         {
             filters_[i] = StateVariableFilter::create(patchState_->sampleRate);
             combs_[i] = CombFilter::create(patchState_->sampleRate);
+            moogFilters_[i] = MoogLadderFilter::create(patchState_->sampleRate);
             dc_[i] = DcBlockingFilter::create();
             ef_[i] = EnvFollower::create();
         }
@@ -338,14 +343,15 @@ public:
         {
             StateVariableFilter::destroy(filters_[i]);
             CombFilter::destroy(combs_[i]);
+            MoogLadderFilter::destroy(moogFilters_[i]);
             DcBlockingFilter::destroy(dc_[i]);
             EnvFollower::destroy(ef_[i]);
         }
     }
 
-    static Filter* create(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState)
+    static Filter* create(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState, bool useMoog = false)
     {
-        return new Filter(patchCtrls, patchCvs, patchState);
+        return new Filter(patchCtrls, patchCvs, patchState, useMoog);
     }
 
     static void destroy(Filter* obj)
@@ -453,10 +459,28 @@ public:
             float lo, ro;
             if (FilterMode::CF == mode_)
             {
-                lo = SoftClip(combs_[LEFT_CHANNEL]->Process(lf) * filterGain_);
-                ro = SoftClip(combs_[RIGHT_CHANNEL]->Process(rf) * filterGain_);
-                lo = dc_[LEFT_CHANNEL]->process(lo);
-                ro = dc_[RIGHT_CHANNEL]->process(ro);
+                if (useMoog_)
+                {
+                    // Moog ladder filter mode
+                    moogFilters_[LEFT_CHANNEL]->setCutoff(freq_);
+                    moogFilters_[LEFT_CHANNEL]->setResonance(resoValue_ * 4.0f); // Scale 0-1 to 0-4
+                    moogFilters_[LEFT_CHANNEL]->setDrive(1.0f + drive_ * 4.0f);
+                    
+                    moogFilters_[RIGHT_CHANNEL]->setCutoff(freq_);
+                    moogFilters_[RIGHT_CHANNEL]->setResonance(resoValue_ * 4.0f);
+                    moogFilters_[RIGHT_CHANNEL]->setDrive(1.0f + drive_ * 4.0f);
+                    
+                    lo = moogFilters_[LEFT_CHANNEL]->process(lf) * filterGain_;
+                    ro = moogFilters_[RIGHT_CHANNEL]->process(rf) * filterGain_;
+                }
+                else
+                {
+                    // Original comb filter mode
+                    lo = SoftClip(combs_[LEFT_CHANNEL]->Process(lf) * filterGain_);
+                    ro = SoftClip(combs_[RIGHT_CHANNEL]->Process(rf) * filterGain_);
+                    lo = dc_[LEFT_CHANNEL]->process(lo);
+                    ro = dc_[RIGHT_CHANNEL]->process(ro);
+                }
             }
             else
             {

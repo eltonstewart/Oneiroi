@@ -7,7 +7,6 @@
 #include "StereoWaveTableOscillator.h"
 #include "Ambience.h"
 #include "Filter.h"
-#include "MoogLadderFilter.h"
 #include "Resonator.h"
 #include "StereoWavefolder.h"
 #include "StereoWidener.h"
@@ -35,8 +34,6 @@ private:
     StereoWaveTableOscillator* wt_;
     WaveTableBuffer* wtBuffer_;
     Filter* filter_;
-    MoogLadderFilter* moogFilter_;
-    bool useMoogFilter_;
     StereoEffect* effects_[kNumEffects];
     Echo* echo_;
     Ambience* ambience_;
@@ -73,12 +70,7 @@ public:
         saw_ = StereoSuperSaw::create(patchCtrls_, patchCvs_, patchState_, true);
         wt_ = StereoWaveTableOscillator::create(patchCtrls_, patchCvs_, patchState_, wtBuffer_);
 
-        filter_ = Filter::create(patchCtrls_, patchCvs_, patchState_);
-        moogFilter_ = MoogLadderFilter::create(patchState_->sampleRate);
-        moogFilter_->setCutoff(800.0f);
-        moogFilter_->setResonance(0.4f);
-        moogFilter_->setDrive(1.5f);
-        useMoogFilter_ = true;  // Moog mode enabled
+        filter_ = Filter::create(patchCtrls_, patchCvs_, patchState_, true);  // useMoog=true
         effects_[kEffectResonator] = Resonator::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectWavefolder] = StereoWavefolder::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectStereoWidener] = StereoWidener::create(patchCtrls_, patchCvs_, patchState_);
@@ -116,7 +108,6 @@ public:
         StereoSuperSaw::destroy(saw_);
         StereoWaveTableOscillator::destroy(wt_);
         Filter::destroy(filter_);
-        MoogLadderFilter::destroy(moogFilter_);
         StereoEffect::destroy(effects_[kEffectResonator]);
         StereoEffect::destroy(effects_[kEffectWavefolder]);
         StereoEffect::destroy(effects_[kEffectStereoWidener]);
@@ -239,34 +230,10 @@ public:
             patchState_->filterPositionFlag = false;
         }
 
-        // Apply filter (Moog or standard)
-        if (useMoogFilter_)
+        // Apply filter at position 1
+        if (FilterPosition::POSITION_1 == filterPosition_)
         {
-            // Moog mode: filter right after oscillators (subtractive synthesis)
-            // Update Moog filter parameters from controls
-            float cutoff = Modulate(patchCtrls_->filterCutoff, patchCtrls_->filterCutoffModAmount, 
-                                   patchState_->modValue, patchCtrls_->filterCutoffCvAmount, 
-                                   patchCvs_->filterCutoff, -1.f, 1.f, 
-                                   patchState_->modAttenuverters, patchState_->cvAttenuverters);
-            // Map 0-1 to 20Hz-20kHz exponentially
-            float cutoffHz = fast_expf(Map(cutoff, -1.f, 1.f, fast_logf(20.f), fast_logf(20000.f)));
-            moogFilter_->setCutoff(cutoffHz);
-            
-            float resonance = Modulate(patchCtrls_->filterResonance, patchCtrls_->filterResonanceModAmount,
-                                      patchState_->modValue, patchCtrls_->filterResonanceCvAmount,
-                                      patchCvs_->filterResonance, -1.f, 1.f,
-                                      patchState_->modAttenuverters, patchState_->cvAttenuverters);
-            moogFilter_->setResonance(Map(resonance, -1.f, 1.f, 0.0f, 4.0f));
-            
-            moogFilter_->process(buffer, buffer);
-        }
-        else
-        {
-            // Standard mode: use original filter positions
-            if (FilterPosition::POSITION_1 == filterPosition_)
-            {
-                filter_->process(buffer, buffer);
-            }
+            filter_->process(buffer, buffer);
         }
         
         int effectIndex = (int)(patchCtrls_->effectType * (kNumEffects - 0.001f));
@@ -288,17 +255,17 @@ public:
         }
         tonalShadow_->Process(buffer, shadowAmount);
 
-        if (!useMoogFilter_ && FilterPosition::POSITION_2 == filterPosition_)
+        if (FilterPosition::POSITION_2 == filterPosition_)
         {
             filter_->process(buffer, buffer);
         }
         echo_->process(buffer, buffer);
-        if (!useMoogFilter_ && FilterPosition::POSITION_3 == filterPosition_)
+        if (FilterPosition::POSITION_3 == filterPosition_)
         {
             filter_->process(buffer, buffer);
         }
         ambience_->process(buffer, buffer);
-        if (!useMoogFilter_ && FilterPosition::POSITION_4 == filterPosition_)
+        if (FilterPosition::POSITION_4 == filterPosition_)
         {
             filter_->process(buffer, buffer);
         }
