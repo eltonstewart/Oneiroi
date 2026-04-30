@@ -45,17 +45,25 @@ public:
 
     inline float readAt(int index)
     {
-        int i = writeIndex_ - index - 1;
-        if (i < 0)
+        int size = static_cast<int>(size_);
+        int offset = index % size;
+        if (offset < 0)
         {
-            i += size_;
+            offset += size;
         }
 
-        return Clamp(buffer_[i], -3.f, 3.f);
+        int i = static_cast<int>(writeIndex_) - offset - 1;
+        if (i < 0)
+        {
+            i += size;
+        }
+
+        return buffer_[i];
     }
 
     inline float read(float index)
     {
+        index = Clamp(index, 0.f, static_cast<float>(size_ - 2));
         size_t idx = (size_t)index;
         float y0 = readAt(idx);
         float y1 = readAt(idx + 1);

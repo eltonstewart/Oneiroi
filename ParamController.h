@@ -1287,7 +1287,7 @@ public:
     {
         if (doBlink_)
         {
-            if (!trigger_.Process(trig_))
+            if (trigger_.Process(trig_) == 0.0f)
             {
                 Toggle();
                 doBlink_ = false;
@@ -1468,7 +1468,7 @@ public:
     {
         if (doBlink_)
         {
-            if (!trigger_.Process(trig_))
+            if (trigger_.Process(trig_) == 0.0f)
             {
                 Set(!*on_);
                 doBlink_ = false;

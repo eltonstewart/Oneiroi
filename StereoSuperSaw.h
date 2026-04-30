@@ -130,9 +130,10 @@ public:
             float currentFreq = freqParam.Next();
             SetFreq(currentFreq);
             float v = volParam.Next();
+            float sample = 0.f;
             for (size_t j = 0; j < 7; j++)
             {
-                output[i] += oscs_[j]->generate() * volumes_[j] * v;
+                sample += oscs_[j]->generate() * volumes_[j] * v;
             }
             // Sub-oscillator: square wave one octave down
             subOsc_->setFrequency(currentFreq * 0.5f);
