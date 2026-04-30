@@ -69,8 +69,8 @@ public:
         looper_ = Looper::create(patchCtrls_, patchCvs_, patchState_);
         wtBuffer_ = WaveTableBuffer::create(looper_->GetBuffer());
 
-        sine_ = StereoSineOscillator::create(patchCtrls_, patchCvs_, patchState_);
-        saw_ = StereoSuperSaw::create(patchCtrls_, patchCvs_, patchState_);
+        sine_ = StereoSineOscillator::create(patchCtrls_, patchCvs_, patchState_, true);
+        saw_ = StereoSuperSaw::create(patchCtrls_, patchCvs_, patchState_, true);
         wt_ = StereoWaveTableOscillator::create(patchCtrls_, patchCvs_, patchState_, wtBuffer_);
 
         filter_ = Filter::create(patchCtrls_, patchCvs_, patchState_);
@@ -78,7 +78,7 @@ public:
         moogFilter_->setCutoff(800.0f);
         moogFilter_->setResonance(0.4f);
         moogFilter_->setDrive(1.5f);
-        useMoogFilter_ = false;  // Default to standard filter, can be toggled
+        useMoogFilter_ = true;  // Moog mode enabled
         effects_[kEffectResonator] = Resonator::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectWavefolder] = StereoWavefolder::create(patchCtrls_, patchCvs_, patchState_);
         effects_[kEffectStereoWidener] = StereoWidener::create(patchCtrls_, patchCvs_, patchState_);
