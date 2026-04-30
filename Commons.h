@@ -179,6 +179,12 @@ constexpr float kAmbienceMakeupGain = 1.2f;
 static const float kOutputFadeInc = 1.f / 16.f;
 constexpr float kOutputMakeupGain = 6.f;
 
+// Analog oscillator character constants
+constexpr float kOscDriftCentsMax = 3.0f;      // ±3 cents thermal drift
+constexpr float kOscDriftUpdateSec = 0.5f;     // New drift target every 0.5s
+constexpr float kOscDriftSmoothCoeff = 0.0001f; // 1-pole smoothing coefficient
+constexpr float kOscSubMix = 0.3f;             // Sub-oscillator mix level (30%)
+
 constexpr float kParamCatchUpDelta = 0.005f;
 
 constexpr int kParamStartMovementLimit = 75; // Samples required to detect the start of a movement - 50ms (1500 = 1s @ block rate)

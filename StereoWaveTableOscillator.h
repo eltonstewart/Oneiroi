@@ -29,6 +29,11 @@ private:
     float xi_;
     float oldVol_;
 
+    // Analog drift state
+    float driftState_;
+    float driftTarget_;
+    int driftCounter_;
+
 public:
     StereoWaveTableOscillator(PatchCtrls* patchCtrls, PatchCvs* patchCvs, PatchState* patchState, WaveTableBuffer* wtBuffer)
     {
@@ -53,6 +58,10 @@ public:
             ef_[i] = EnvFollower::create();
         }
         oldFreq_ = kOscFreqMin;
+
+        driftState_ = 0.f;
+        driftTarget_ = 0.f;
+        driftCounter_ = 0;
     }
     ~StereoWaveTableOscillator()
     {
@@ -84,6 +93,19 @@ public:
         }
 
         float f = Modulate(patchCtrls_->oscPitch + patchCtrls_->oscPitch * u, patchCtrls_->oscPitchModAmount, patchState_->modValue, 0, 0, kOscFreqMin, kOscFreqMax, patchState_->modAttenuverters, patchState_->cvAttenuverters);
+
+        // Analog pitch drift - thermal VCO instability
+        driftCounter_ += size;
+        if (driftCounter_ >= (int)(patchState_->sampleRate * kOscDriftUpdateSec))
+        {
+            driftTarget_ = RandomFloat(-1.f, 1.f);
+            driftCounter_ = 0;
+        }
+        ONE_POLE(driftState_, driftTarget_, kOscDriftSmoothCoeff);
+        float driftCents = driftState_ * kOscDriftCentsMax;
+        float driftFactor = fast_powf(2.f, driftCents / 1200.f);
+        f *= driftFactor;
+
         // Avoid frequency jittering translating to jumps in the wavetable.
         if (fabs(oldFreq_ - f) < 1.f)
         {

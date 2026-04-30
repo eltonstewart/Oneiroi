@@ -3,7 +3,7 @@
 PATCHNAME = TechnoMachine
 OWL_DIR = ../OwlProgram
 PATCHSOURCE = $(shell pwd)
-TOOLROOT = /Applications/ArmGNUToolchain/14.3.rel1/arm-none-eabi/bin/
+TOOLROOT = /opt/homebrew/bin/
 
 # Flags to pass to the sub-make
 MAKE_FLAGS = PATCHNAME=$(PATCHNAME) \

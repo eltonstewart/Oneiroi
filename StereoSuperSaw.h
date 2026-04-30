@@ -2,6 +2,7 @@
 
 #include "Commons.h"
 #include "RampOscillator.h"
+#include "SquareWaveOscillator.h"
 
 /**
  * @brief 7 sawtooth oscillators with detuning and mixing.
@@ -13,11 +14,17 @@ class SuperSaw
 {
 private:
   AntialiasedRampOscillator* oscs_[7];
+  AntialiasedSquareWaveOscillator* subOsc_;
   float detunes_[7];
   float volumes_[7];
   float oldFreq_;
   float oldVol_;
   float detune_;
+
+  // Analog drift state
+  float driftState_;
+  float driftTarget_;
+  int driftCounter_;
 
 public:
     SuperSaw(float sampleRate)
@@ -28,8 +35,12 @@ public:
             detunes_[i] = 0;
             volumes_[i] = 0;
         }
+        subOsc_ = AntialiasedSquareWaveOscillator::create(sampleRate);
         detune_ = 0;
         oldVol_ = 0.0f;
+        driftState_ = 0.f;
+        driftTarget_ = 0.f;
+        driftCounter_ = 0;
     }
     ~SuperSaw()
     {
@@ -37,6 +48,7 @@ public:
         {
             AntialiasedRampOscillator::destroy(oscs_[i]);
         }
+        AntialiasedSquareWaveOscillator::destroy(subOsc_);
     }
 
     void SetFreq(float value)
@@ -98,17 +110,35 @@ public:
     {
         size_t size = output.getSize();
 
+        // Analog pitch drift - thermal VCO instability
+        driftCounter_ += size;
+        if (driftCounter_ >= (int)(oscs_[0]->getSampleRate() * kOscDriftUpdateSec))
+        {
+            driftTarget_ = RandomFloat(-1.f, 1.f);
+            driftCounter_ = 0;
+        }
+        ONE_POLE(driftState_, driftTarget_, kOscDriftSmoothCoeff);
+        float driftCents = driftState_ * kOscDriftCentsMax;
+        float driftFactor = fast_powf(2.f, driftCents / 1200.f);
+        freq *= driftFactor;
+
         ParameterInterpolator freqParam(&oldFreq_, freq, size, ParameterInterpolator::BY_SIZE);
         ParameterInterpolator volParam(&oldVol_, targetVol, size, ParameterInterpolator::BY_SIZE);
 
         for (size_t i = 0; i < size; i++)
         {
-            SetFreq(freqParam.Next());
+            float currentFreq = freqParam.Next();
+            SetFreq(currentFreq);
             float v = volParam.Next();
             for (size_t j = 0; j < 7; j++)
             {
                 output[i] += oscs_[j]->generate() * volumes_[j] * v;
             }
+            // Sub-oscillator: square wave one octave down
+            subOsc_->setFrequency(currentFreq * 0.5f);
+            output[i] += subOsc_->generate() * kOscSubMix * v;
+            // Gentle analog saturation
+            output[i] = SoftClip(output[i]);
         }
 
         output.multiply(0.3f * (1.4f - detune_));

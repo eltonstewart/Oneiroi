@@ -21,6 +21,11 @@ private:
     bool fadeOut_, fadeIn_;
     float sine1Volume_, sine2Volume_;
 
+    // Analog drift state
+    float driftState_;
+    float driftTarget_;
+    int driftCounter_;
+
     void FadeOut()
     {
         sine2Volume_ -= kOscSineFadeInc;
@@ -59,6 +64,10 @@ public:
         sine1Volume_ = 0.5f;
         sine2Volume_ = 0.5f;
         oldVol_ = 0.0f;
+
+        driftState_ = 0.f;
+        driftTarget_ = 0.f;
+        driftCounter_ = 0;
     }
     ~StereoSineOscillator()
     {
@@ -95,6 +104,20 @@ public:
         float f[2];
         f[0] = Clamp(patchCtrls_->oscPitch, kOscFreqMin, kOscFreqMax);
         f[1] = Clamp(f[0] * u, kOscFreqMin, kOscFreqMax);
+
+        // Analog pitch drift - thermal VCO instability
+        driftCounter_ += size;
+        if (driftCounter_ >= (int)(patchState_->sampleRate * kOscDriftUpdateSec))
+        {
+            driftTarget_ = RandomFloat(-1.f, 1.f);
+            driftCounter_ = 0;
+        }
+        ONE_POLE(driftState_, driftTarget_, kOscDriftSmoothCoeff);
+        float driftCents = driftState_ * kOscDriftCentsMax;
+        float driftFactor = fast_powf(2.f, driftCents / 1200.f);
+        f[0] *= driftFactor;
+        f[1] *= driftFactor;
+
         ParameterInterpolator freqParams[2] = {ParameterInterpolator(&oldFreqs_[0], f[0], size, ParameterInterpolator::BY_SIZE), ParameterInterpolator(&oldFreqs_[1], f[1], size, ParameterInterpolator::BY_SIZE)};
         
         float vol = Modulate(patchCtrls_->osc1Vol, patchCtrls_->osc1VolModAmount, patchState_->modValue, patchCtrls_->osc1VolCvAmount, patchCvs_->osc1Vol, 0.f, 1.f, patchState_->modAttenuverters, patchState_->cvAttenuverters);
@@ -124,6 +147,7 @@ public:
 
             float out = oscs_[0]->generate() * sine1Volume_ + oscs_[1]->generate() * sine2Volume_;
 
+            out = SoftClip(out); // Gentle analog saturation
             out *= volParam.Next();
 
             output.getSamples(LEFT_CHANNEL).setElement(i, out);
